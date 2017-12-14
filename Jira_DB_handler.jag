@@ -1,0 +1,154 @@
+<%
+var data = require('../config.json');
+
+        
+
+if (request.getParameter("logout") == null && session.get("logged-in") != null) {
+    var log = new Log();
+    log.info("Dashboard hit - "+ session.get("username"));
+    var reqFromUser = request.getParameter("reqFromUser");
+   
+
+    	  var prefix = "https://support-staging.wso2.com/jira/rest/api/2/search";
+
+
+    var resultRetrived = false;
+    
+    if(("success").equals(reqFromUser)){
+            resultRetrived = true;                
+            
+        }
+        
+	    function getJsonFromKey(url){
+			  return get(prefix+url,{ "Content-Type": "application/json"},{ "Authorization" : ""});
+	           
+	    }
+
+        function getJson(){
+        	return get(prefix ,{jql : "updated>=-150d" , maxResults:"304"}, {"Authorization" : ""});
+		}
+            
+    
+    
+    var config = {};
+    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
+
+    
+                                                    
+             
+    
+    try {
+
+            var issueJson = getJson();
+            var iss = JSON.parse(issueJson.data);
+            
+            var issueJsonFromKey = getJsonFromKey('TSCPROD-73');
+            var issK = JSON.parse(issueJsonFromKey.data);
+                        
+            var total = iss.total;
+            													 
+            for(var i=0; i<total;i++){
+            	if(iss.issues[i].fields.creator !== null){
+            				var query1  = "INSERT INTO EMP_JIRA (DATE, EMPLOYEE, CREATED) VALUES('"+iss.issues[i].fields.created+"' , '"+iss.issues[i].fields.creator.name+"', '"+iss.issues[i].key+"');";
+            				db.query(query1);
+            	}
+            }
+
+            
+       }
+            
+        catch(e){
+            log.error("Error occurred while retrieving information from Jira API : "+ e.toString());
+        }
+        
+        finally{
+                    db.close();
+        }
+        
+      
+
+       
+
+%>
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+
+
+
+
+
+
+<html lang="en">
+<head>
+
+
+</head>
+<body>
+
+ <p><% issK.fields.comment.maxResults %></p>
+
+
+ <table id="rotationt" class="rotationt"  style="width:100%">
+                                             <thead>
+                                        			<tr >
+                                                     <th>ID</th>                                                     
+                                                     <th>Key</th>
+                                                     <th>Created Date</th>
+                                                     <th>Creator Name</th>
+                                                     <th>Reporter Name</th>                                                    
+                                                     <th>Creator Key</th> 
+                                                     
+                                                                                
+                                        			</tr>
+                                        		</thead>
+                                        		
+                                        		<tbody>
+														<% 
+													
+													 
+													 
+													 
+													 var total = iss.total;
+													 
+													 for(var i=0; i<total;i++){   %>  <tr>  
+													
+																<td><% print(iss.issues[i].id);  %> </td> 
+																<td> <% print(iss.issues[i].key); %></td>  <%
+																
+																if(iss.issues[i].fields.creator !== null){  %>
+																	<td> <% print(iss.issues[i].fields.created); %></td>
+																	<td> <% print(iss.issues[i].fields.creator.name); %></td>
+																	<td> <% print(iss.issues[i].fields.reporter.name); %></td>
+																	<td> <% print(iss.issues[i].fields.creator.key); %></td>
+																<% }
+																else{  %>
+																	<td colspan="4"> <% print("Null"); %></td>
+																<% }    %>
+															
+													 	</tr>
+													 	
+													 	
+													 	<%
+													}  %> 
+													 	
+													
+                                        		
+                                        		</tbody>
+                                           		 
+                                                   
+                                                   
+                                                 </table>
+
+   
+
+</body>
+</html>
+
+<%
+}
+
+else {
+    var location = request.getRequestURL()+"?"+encodeURIComponent(request.getQueryString());
+    response.sendRedirect("../index.jag?reject=timedout&location="+location);  //exit
+}
+%>
