@@ -1,14 +1,12 @@
 <%
 var data = require('../config.json');
-
         
-
 if (request.getParameter("logout") == null && session.get("logged-in") != null) {
     var log = new Log();
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
-   
     	  var prefix = "https://support-staging.wso2.com/jira/rest/api/2/search";
+    	  var prefixForKey = "https://support-staging.wso2.com/jira/rest/api/2/issue/";
 
 
     var resultRetrived = false;
@@ -18,26 +16,28 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             
         }
         
+	    function getJsonFromKey(url){
+			  return get(prefixForKey+url,{ "Content-Type": "application/json"},{ "Authorization" : "Basic "});
+	           
+	    }
 
         function getJson(){
-        		  return get(prefix ,{jql : "updated>=-150d" , maxResults:"304"}, {"Authorization" : "Basic "});
-                   
-            }
+        	return get(prefix ,{jql : "updated>=-500d" , maxResults:"1000"}, {"Authorization" : "Basic "});
+		}
             
     
     
     var config = {};
-    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
-
-    
-                                                    
+    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "root", "root", config);  
+                                                       
              
-    
     try {
-                       
-                     
+
             var issueJson = getJson();
             var iss = JSON.parse(issueJson.data);
+            
+            var issueJsonFromKey = getJsonFromKey("");
+            var issK = JSON.parse(issueJsonFromKey.data);
                         
             var total = iss.total;
             													 
@@ -47,7 +47,6 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             				db.query(query1);
             	}
             }
-
             
        }
             
@@ -66,24 +65,19 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 %>
 
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-
-
-
-
-
-
 <html lang="en">
 <head>
 
 
 </head>
 <body>
-
+ <p><% print(issK.fields.comment.maxResults); %></p>
  <table id="rotationt" class="rotationt"  style="width:100%">
                                              <thead>
                                         			<tr >
                                                      <th>ID</th>                                                     
                                                      <th>Key</th>
+                                                     <th>No.of Comments</th>
                                                      <th>Created Date</th>
                                                      <th>Creator Name</th>
                                                      <th>Reporter Name</th>                                                    
@@ -95,16 +89,32 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                         		
                                         		<tbody>
 														<% 
-													
-													 
-													 
-													 
 													 var total = iss.total;
+													 var itterations = 0;
+													 
+													 if(total > 999){
+													 	itterations = Math.floor(total/1000)*1000;
+													 }
+														
+													 for(var s=0;s<total;s+1000){
+													 	<td><%  print(itterations);  %> </td>
+																
+													 }
+													 
+													 
+													 
 													 
 													 for(var i=0; i<total;i++){   %>  <tr>  
 													
-																<td><% print(iss.issues[i].id);  %> </td> 
+																<td><% print(iss.issues[i].id);%> </td> 
 																<td> <% print(iss.issues[i].key); %></td>  <%
+																
+																if(iss.issues[i].fields.comment !== null){ %>
+																	<td> <% print(iss.issues[i].fields.comment); %></td>
+
+																<% }
+																
+																
 																
 																if(iss.issues[i].fields.creator !== null){  %>
 																	<td> <% print(iss.issues[i].fields.created); %></td>
