@@ -8,7 +8,6 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
    
-
     	  var prefix = "https://support-staging.wso2.com/jira/rest/api/2/search";
 
 
@@ -19,14 +18,11 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             
         }
         
-	    function getJsonFromKey(url){
-			  return get(prefix+url,{ "Content-Type": "application/json"},{ "Authorization" : ""});
-	           
-	    }
 
         function getJson(){
-        	return get(prefix ,{jql : "updated>=-150d" , maxResults:"304"}, {"Authorization" : ""});
-		}
+        		  return get(prefix ,{jql : "updated>=-150d" , maxResults:"304"}, {"Authorization" : "Basic "});
+                   
+            }
             
     
     
@@ -38,12 +34,10 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
              
     
     try {
-
+                       
+                     
             var issueJson = getJson();
             var iss = JSON.parse(issueJson.data);
-            
-            var issueJsonFromKey = getJsonFromKey('TSCPROD-73');
-            var issK = JSON.parse(issueJsonFromKey.data);
                         
             var total = iss.total;
             													 
@@ -84,9 +78,6 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 </head>
 <body>
-
- <p><% issK.fields.comment.maxResults %></p>
-
 
  <table id="rotationt" class="rotationt"  style="width:100%">
                                              <thead>
