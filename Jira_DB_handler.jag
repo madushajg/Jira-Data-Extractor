@@ -1,15 +1,12 @@
 <%
-var data = require('../config.json');
-
-        
+var data = require('../config.json');        
 
 if (request.getParameter("logout") == null && session.get("logged-in") != null) {
     var log = new Log();
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
-   
-    	  var prefix = "https://support-staging.wso2.com/jira/rest/api/2/search";
-    	  var prefixForKey = "https://support-staging.wso2.com/jira/rest/api/2/issue/";
+    	  var prefix = "https://support_.wso2.com/jira/rest/api/2/search";
+    	  var prefixForKey = "https://support_.com/jira/rest/api/2/issue/";
 
 
     var resultRetrived = false;
@@ -18,43 +15,44 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             resultRetrived = true;                
             
         }
-        
-	    function getJsonFromKey(url){
-			  return get(prefixForKey+url,{ "Content-Type": "application/json"},{ "Authorization" : ""});
-	           
+	    
+	    function getTotal(){
+	        return get(prefix ,{jql : "updated>=-3d" , maxResults:"0"}, {"Authorization" : ""});
 	    }
 
         function getJson(){
-        	return get(prefix ,{jql : "updated>=-500d" , maxResults:"1000"}, {"Authorization" : ""});
+        	return get(prefix ,{jql : "updated>=-3d" , maxResults:"1000" ,"fields":"creator,reporter,created"}, {"Authorization" : ""});
 		}
-            
-    
-    
+		
+		function getJsonFromStart(index){
+		    return get(prefix ,{jql : "updated>=-3d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
+		}
+		
+		function getJsonFromKey(issuekey){
+			var param1 = "key="+issuekey ;
+			var a = get(prefix ,{jql : param1, "fields":"comment"},{ "Authorization" : ""});
+			return a;
+		}
+   
     var config = {};
-    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
+    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "root", "root", config);
 
-    
-                                                    
-             
-    
     try {
 
-            var issueJson = getJson();
-            var iss = JSON.parse(issueJson.data);
+    	    var totalIsuues = JSON.parse(getTotal().data);    
+
+            var issueJson = JSON.parse(getJson().data);   
             
-            var issueJsonFromKey = getJsonFromKey("");
-            var issK = JSON.parse(issueJsonFromKey.data);
+            var issueJsonFromKey = JSON.parse(getJsonFromKey("ACTPROD-45/").data);
                         
-            var total = iss.total;
+            var total = totalIsuues.total;
             													 
             for(var i=0; i<total;i++){
-            	if(iss.issues[i].fields.creator !== null){
-            				var query1  = "INSERT INTO EMP_JIRA (DATE, EMPLOYEE, CREATED) VALUES('"+iss.issues[i].fields.created+"' , '"+iss.issues[i].fields.creator.name+"', '"+iss.issues[i].key+"');";
+            	if(issueJson.issues[i].fields.creator !== null){
+            				var query1  = "INSERT INTO EMP_JIRA (DATE, EMPLOYEE, CREATED) VALUES('"+issueJson.issues[i].fields.created+"' , '"+issueJson.issues[i].fields.creator.name+"', '"+issueJson.issues[i].key+"');";
             				db.query(query1);
             	}
-            }
-
-            
+            }  
        }
             
         catch(e){
@@ -64,20 +62,9 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
         finally{
                     db.close();
         }
-        
-      
-
-       
-
 %>
 
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-
-
-
-
-
-
 <html lang="en">
 <head>
 
@@ -85,19 +72,29 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 </head>
 <body>
 
- <p><% print(issK.fields.comment.maxResults); %></p>
-
+ <p><% 
+ 
+//  print(issK.fields.comment.maxResults); 
+ print("with .data  "+totalIsuues);
+ print(totalIsuues);
+ %></p>
+ 
+         <p><%  
+        var testing =JSON.parse(getJsonFromKey("XSHPROD-42").data);
+         
+        print("getJsonFromKey  ");  
+        print(testing.issues[0].fields.comment);%></p>
 
  <table id="rotationt" class="rotationt"  style="width:100%">
                                              <thead>
                                         			<tr >
                                                      <th>ID</th>                                                     
                                                      <th>Key</th>
-                                                     <th>No.of Comments</th>
                                                      <th>Created Date</th>
                                                      <th>Creator Name</th>
                                                      <th>Reporter Name</th>                                                    
                                                      <th>Creator Key</th> 
+                                                     <th>No of Comments</th> 
                                                      
                                                                                 
                                         			</tr>
@@ -105,51 +102,43 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                         		
                                         		<tbody>
 														<% 
-													 var total = iss.total;
-													 var itterations = 0;
-													 
-													 if(total > 999){
-													 	itterations = Math.floor(total/1000)*1000;
-													 }
-														
-													 for(var s=0;s<total;s+1000){
-													 	<td><%  print(itterations);  %> </td>
-																
-													 }
-													 
-													 
-													 
-													 
-													 for(var i=0; i<total;i++){   %>  <tr>  
-													
-																<td><% print(iss.issues[i].id);%> </td> 
-																<td> <% print(iss.issues[i].key); %></td>  <%
-																
-																if(iss.issues[i].fields.comment !== null){ %>
-																	<td> <% print(iss.issues[i].fields.comment); %></td>
+													 	
+													 for(var s=0;s<total;s+=1000){ 
+														var issueData = JSON.parse(getJsonFromStart(s).data); 
+														log.debug("IssueData"+issueData);
 
-																<% }
-																
-																
-																
-																if(iss.issues[i].fields.creator !== null){  %>
-																	<td> <% print(iss.issues[i].fields.created); %></td>
-																	<td> <% print(iss.issues[i].fields.creator.name); %></td>
-																	<td> <% print(iss.issues[i].fields.reporter.name); %></td>
-																	<td> <% print(iss.issues[i].fields.creator.key); %></td>
-																<% }
-																else{  %>
-																	<td colspan="4"> <% print("Null"); %></td>
-																<% }    %>
+														for(var i=0;i<1000;i++){ %> <tr>
+															<% var issueKey = issueData.issues[i].key; %>
+															<td><% print(issueData.issues[i].id); %></td>
+															<td><% print(issueKey); %></td>
 															
-													 	</tr>
+														<%	if(issueData.issues[i].fields.creator !== null){  %>
+															<td><% print(issueData.issues[i].fields.created); %></td>
+															<td><% print(issueData.issues[i].fields.creator.name); %></td>
+															<td><% print(issueData.issues[i].fields.reporter.name); %></td>
+															<td><% print(issueData.issues[i].fields.creator.key); %></td>
+														<%	}
+	// 														var issueContent = JSON.parse(getJsonFromKey(issueKey).data);
+															var issue = getJsonFromKey(issueKey);
+															var issueContent = JSON.parse(issue.data);
+															
+															if(issueContent.issues[0].fields.comment !== null){  
+																var noOfComments = issueContent.issues[0].fields.comment.maxResults;  %>
+																<td><% print(noOfComments); %></td>
+																
+																
+														<%	}
+														
+															%>
+														</tr>
+														<% }
 													 	
-													 	
-													 	<%
-													}  %> 
-													 	
+
+
+													 }
+								
 													
-                                        		
+                                        			%>
                                         		</tbody>
                                            		 
                                                    
