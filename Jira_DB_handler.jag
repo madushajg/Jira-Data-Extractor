@@ -1,12 +1,12 @@
 <%
-var data = require('../config.json');        
+var data = require('../config.json');
 
 if (request.getParameter("logout") == null && session.get("logged-in") != null) {
     var log = new Log();
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
-    	  var prefix = "https://support_.wso2.com/jira/rest/api/2/search";
-    	  var prefixForKey = "https://support_.com/jira/rest/api/2/issue/";
+    	  var prefix = "https://support-staging.wso2.com/jira/rest/api/2/search";
+    	  var prefixForKey = "https://support-staging.wso2.com/jira/rest/api/2/issue/";
 
 
     var resultRetrived = false;
@@ -15,17 +15,16 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             resultRetrived = true;                
             
         }
-	    
 	    function getTotal(){
-	        return get(prefix ,{jql : "updated>=-3d" , maxResults:"0"}, {"Authorization" : ""});
+	        return get(prefix ,{jql : "updated>=-1d" , maxResults:"0"}, {"Authorization" : ""});
 	    }
 
         function getJson(){
-        	return get(prefix ,{jql : "updated>=-3d" , maxResults:"1000" ,"fields":"creator,reporter,created"}, {"Authorization" : ""});
+        	return get(prefix ,{jql : "updated>=-1d" , maxResults:"1000" ,"fields":"creator,reporter,created"}, {"Authorization" : ""});
 		}
 		
 		function getJsonFromStart(index){
-		    return get(prefix ,{jql : "updated>=-3d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
+		    return get(prefix ,{jql : "updated>=-1d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
 		}
 		
 		function getJsonFromKey(issuekey){
@@ -33,13 +32,14 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 			var a = get(prefix ,{jql : param1, "fields":"comment"},{ "Authorization" : ""});
 			return a;
 		}
-   
-    var config = {};
-    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "root", "root", config);
 
+    var config = {};
+    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
     try {
 
-    	    var totalIsuues = JSON.parse(getTotal().data);    
+    	    var totalIsuues = JSON.parse(getTotal().data);    	
+    	    var totalIsuues2 = JSON.parse(getTotal());
+    	    var totalIsuues3 = getTotal();
 
             var issueJson = JSON.parse(getJson().data);   
             
@@ -52,7 +52,9 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             				var query1  = "INSERT INTO EMP_JIRA (DATE, EMPLOYEE, CREATED) VALUES('"+issueJson.issues[i].fields.created+"' , '"+issueJson.issues[i].fields.creator.name+"', '"+issueJson.issues[i].key+"');";
             				db.query(query1);
             	}
-            }  
+            }
+
+            
        }
             
         catch(e){
@@ -61,10 +63,12 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
         
         finally{
                     db.close();
-        }
+        } 
+
 %>
 
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+
 <html lang="en">
 <head>
 
@@ -73,17 +77,20 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 <body>
 
  <p><% 
- 
-//  print(issK.fields.comment.maxResults); 
  print("with .data  "+totalIsuues);
  print(totalIsuues);
  %></p>
  
-         <p><%  
-        var testing =JSON.parse(getJsonFromKey("XSHPROD-42").data);
-         
+        <p><%  
+        
         print("getJsonFromKey  ");  
-        print(testing.issues[0].fields.comment);%></p>
+        print(JSON.parse(getJsonFromKey("").data));%></p>
+        
+         <p><%  
+        
+        print("getJsonFromStart  ");  
+        print(JSON.parse(getJsonFromStart(0).data));%></p>
+
 
  <table id="rotationt" class="rotationt"  style="width:100%">
                                              <thead>
@@ -105,7 +112,8 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 													 	
 													 for(var s=0;s<total;s+=1000){ 
 														var issueData = JSON.parse(getJsonFromStart(s).data); 
-														log.debug("IssueData"+issueData);
+// 														var issueData = JSON.parse(getJsonFromStart(s));
+
 
 														for(var i=0;i<1000;i++){ %> <tr>
 															<% var issueKey = issueData.issues[i].key; %>
@@ -118,20 +126,13 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 															<td><% print(issueData.issues[i].fields.reporter.name); %></td>
 															<td><% print(issueData.issues[i].fields.creator.key); %></td>
 														<%	}
-	// 														var issueContent = JSON.parse(getJsonFromKey(issueKey).data);
-															var issue = getJsonFromKey(issueKey);
-															var issueContent = JSON.parse(issue.data);
 															
-															if(issueContent.issues[0].fields.comment !== null){  
-																var noOfComments = issueContent.issues[0].fields.comment.maxResults;  %>
-																<td><% print(noOfComments); %></td>
-																
-																
+															var issueContent = JSON.parse(getJsonFromKey(issueKey).data);
+															if(issueContent.fields.comment !== null){  %>
+																<td><% print(issueContent.fields.comment.maxResults); %></td>
 														<%	}
 														
-															%>
-														</tr>
-														<% }
+														}
 													 	
 
 
