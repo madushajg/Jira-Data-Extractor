@@ -1,12 +1,12 @@
 <%
-var data = require('../config.json');
+var data = require('../config.json');        
 
 if (request.getParameter("logout") == null && session.get("logged-in") != null) {
     var log = new Log();
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
    
-    	  var prefix = "https://_/jira/rest/api/2/search";
+    	  var prefix = "https://-/jira/rest/api/2/search";
     	  var prefixForKey = "https://-/jira/rest/api/2/issue/";
 
     var resultRetrived = false;
@@ -15,44 +15,65 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             resultRetrived = true;                
             
         }
-            
-	    function getTotal(){
-	        return get(prefix ,{jql : "updated>=-3d" , maxResults:"0"}, {"Authorization" : ""});
+	    
+	    function getCreatorTotal(){
+	        return get(prefix ,{jql : "created>=-200d" , maxResults:"0"}, {"Authorization" : ""});
 	    }
-
-        function getJson(){
-        	return get(prefix ,{jql : "updated>=-3d" , maxResults:"1000" ,"fields":"creator,reporter,created"}, {"Authorization" : ""});
+	    
+	    function getUpdatedTotal(){
+    	    return get(prefix ,{jql : "updated>=-200d" , maxResults:"0"}, {"Authorization" : ""});
+    	}
+    	
+		function getCreator(index){
+		    return get(prefix ,{jql : "created>=-200d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
 		}
 		
-		function getJsonFromStart(index){
-		    return get(prefix ,{jql : "updated>=-3d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
+		function getUpdates(index){
+		    return get(prefix ,{jql : "updated>=-200d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
 		}
 		
-		function getJsonFromKey(issuekey){
+		function getCommentor(issuekey){
 			var param1 = "key="+issuekey ;
 			var a = get(prefix ,{jql : param1, "fields":"comment"},{ "Authorization" : ""});
 			return a;
 		}
+		     
+       
     var config = {};
-    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);           
-    
+    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
+
+
     try {
-    	    var totalIsuues = JSON.parse(getTotal().data);    
-
-            var issueJson = JSON.parse(getJson().data);   
+    	
+    	    var totalIssuesCreated = JSON.parse(getCreatorTotal().data);   
+    	    var totalIssuesUpdated = JSON.parse(getUpdatedTotal().data);   
             
-            var issueJsonFromKey = JSON.parse(getJsonFromKey("ACTPROD-45/").data);
+            var issueJsonFromKey = JSON.parse(getCommentor("ACTPROD-45/").data);
                         
-            var total = totalIsuues.total;
-            													 
-            for(var i=0; i<total;i++){
-            	if(issueJson.issues[i].fields.creator !== null){
-            				var query1  = "INSERT INTO EMP_JIRA (DATE, EMPLOYEE, CREATED) VALUES('"+issueJson.issues[i].fields.created+"' , '"+issueJson.issues[i].fields.creator.name+"', '"+issueJson.issues[i].key+"');";
-            				db.query(query1);
-            	}
-            }
-
+            var createdTotal = totalIssuesCreated.total;
+            var updatedTotal = totalIssuesUpdated.total;
             
+            // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
+            var creator = null;
+            
+            for(var s=0;s<createdTotal;s+=1000){
+            	var issueData = JSON.parse(getCreator(s).data); 							
+            	if(createdTotal-s<1000)
+            		max = createdTotal;
+            	else 
+            		max= 1000;
+            
+            		for(var i=0;i<max;i++){            													
+            					if(issueData.issues[i].fields.creator !== null){ 															
+            							creator = issueData.issues[i].fields.creator.name; 
+            					}		
+            					var query1  = "INSERT INTO ISSUE_CREATOR (CREATED_DATE, JIRA_KEY, CREATED_BY) VALUES('"+issueData.issues[i].fields.created+"' , '"+issueData.issues[i].key+"', '"+creator+"');";
+            					db.query(query1);
+            					creator = null;
+            		}         													 	
+             }           								
+            // #################### INSERT COMMENTING DATA IN TO ISSUE_COMMENTS TABLE #####################
+                
        }
             
         catch(e){
@@ -62,39 +83,29 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
         finally{
                     db.close();
         }
-            
-
+        
 %>
 
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+
 <html lang="en">
 <head>
-
-
 </head>
 <body>
 
- <p><% 
- print("with .data  "+totalIsuues);
- print(totalIsuues);
+ <p><%  
+ print("with .data ");
+ print(totalIsuuesCreated);
  %></p>
- 
-         <p><%  
-        var testing =JSON.parse(getJsonFromKey("XSHPROD-42").data);
-         
-        print("getJsonFromKey  ");  
-        print(testing.issues[0].fields.comment);%></p>
-
  <table id="rotationt" class="rotationt"  style="width:100%">
                                              <thead>
                                         			<tr >
                                                      <th>ID</th>                                                     
                                                      <th>Key</th>
-                                                     <th>Created Date</th>
-                                                     <th>Creator Name</th>
-                                                     <th>Reporter Name</th>                                                    
-                                                     <th>Creator Key</th> 
+                                                     <th>Commented Date</th>
                                                      <th>No of Comments</th> 
+                                                     <th>Commenter</th>
+
                                                      
                                                                                 
                                         			</tr>
@@ -103,31 +114,33 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                         		<tbody>
 														<% 
 													 	
-													 for(var s=0;s<total;s+=1000){ 
-														var issueData = JSON.parse(getJsonFromStart(s).data); 
-														log.debug("IssueData"+issueData);
+													 for(var s=0;s<updatedTotal;s+=1000){ 
+														var issueData = JSON.parse(getUpdates(s).data); 
+														log.debug(issueData);
+														
+														if(updatedTotal-s<1000)
+															max = updatedTotal;
+														else 
+															max= 1000;
 
-														for(var i=0;i<1000;i++){ %> <tr>
-															<% var issueKey = issueData.issues[i].key; %>
+														for(var i=0;i<max;i++){ 
+															var issueKey = issueData.issues[i].key;
+															log.debug(issueKey);  %>  <tr>
 															<td><% print(issueData.issues[i].id); %></td>
 															<td><% print(issueKey); %></td>
-															
-														<%	if(issueData.issues[i].fields.creator !== null){  %>
 															<td><% print(issueData.issues[i].fields.created); %></td>
-															<td><% print(issueData.issues[i].fields.creator.name); %></td>
-															<td><% print(issueData.issues[i].fields.reporter.name); %></td>
-															<td><% print(issueData.issues[i].fields.creator.key); %></td>
-														<%	}
-	// 														var issueContent = JSON.parse(getJsonFromKey(issueKey).data);
-															var issue = getJsonFromKey(issueKey);
-															var issueContent = JSON.parse(issue.data);
 															
-															if(issueContent.issues[0].fields.comment !== null){  
-																var noOfComments = issueContent.issues[0].fields.comment.maxResults;  %>
-																<td><% print(noOfComments); %></td>
-																
-																
+														<%	if(issueData.issues[i].fields.creator !== null){  %>															
+															<td><% print(issueData.issues[i].fields.creator.name); %></td>
 														<%	}
+// 															var issueContent = JSON.parse(getJsonFromKey(issueKey).data);
+// 															var issue = getCommentor(issueKey);
+// 															var issueContent = JSON.parse(issue.data);
+															
+// 															if(issueContent.issues[0].fields.comment !== null){  
+// 																var noOfComments = issueContent.issues[0].fields.comment.maxResults;  
+																
+// 															}
 														
 															%>
 														</tr>
