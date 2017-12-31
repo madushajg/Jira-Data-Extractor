@@ -17,22 +17,22 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
         }
 	    
 	    function getCreatorTotal(){
-	        return get(prefix ,{jql : "created>=-200d" , maxResults:"0"}, {"Authorization" : ""});
+	        return get(prefix ,{jql : "created>=-4d" , maxResults:"0"}, {"Authorization" : ""});
 	    }
 	    
 	    function getUpdatedTotal(){
-    	    return get(prefix ,{jql : "updated>=-200d" , maxResults:"0"}, {"Authorization" : ""});
+    	    return get(prefix ,{jql : "updated>=-4d" , maxResults:"0"}, {"Authorization" : ""});
     	}
     	
 		function getCreator(index){
-		    return get(prefix ,{jql : "created>=-200d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
+		    return get(prefix ,{jql : "created>=-4d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
 		}
 		
 		function getUpdates(index){
-		    return get(prefix ,{jql : "updated>=-200d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
+		    return get(prefix ,{jql : "updated>=-4d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
 		}
 		
-		function getCommentor(issuekey){
+		function getCommenter(issuekey){
 			var param1 = "key="+issuekey ;
 			var a = get(prefix ,{jql : param1, "fields":"comment"},{ "Authorization" : ""});
 			return a;
@@ -47,23 +47,22 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     	
     	    var totalIssuesCreated = JSON.parse(getCreatorTotal().data);   
     	    var totalIssuesUpdated = JSON.parse(getUpdatedTotal().data);   
-            
-            var issueJsonFromKey = JSON.parse(getCommentor("ACTPROD-45/").data);
-                        
+                                    
             var createdTotal = totalIssuesCreated.total;
             var updatedTotal = totalIssuesUpdated.total;
             
             // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
             var creator = null;
+            var maxCr = 0;
             
             for(var s=0;s<createdTotal;s+=1000){
             	var issueData = JSON.parse(getCreator(s).data); 							
             	if(createdTotal-s<1000)
-            		max = createdTotal;
+            		maxCr = createdTotal;
             	else 
-            		max= 1000;
+            		maxCr= 1000;
             
-            		for(var i=0;i<max;i++){            													
+            		for(var i=0;i<maxCr;i++){            													
             					if(issueData.issues[i].fields.creator !== null){ 															
             							creator = issueData.issues[i].fields.creator.name; 
             					}		
@@ -73,6 +72,40 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             		}         													 	
              }           								
             // #################### INSERT COMMENTING DATA IN TO ISSUE_COMMENTS TABLE #####################
+			  var commentDate = null;
+			  var commenter = null;
+			  var maxCm = 0;
+                         
+             for(var s=0;s<updatedTotal;s+=1000){
+                 var updatedIssues = JSON.parse(getUpdates(s).data); 		
+                 log.debug(updatedIssues);
+                 if(updatedTotal-s<1000)
+                    maxCm = updatedTotal;
+                 else 
+                    maxCm= 1000;
+                         
+                    for(var x=0;x<maxCm;x++){            													
+                    	var issueKey = issueData.issues[x].key;
+                    	
+                    	var id = issueData.issues[x].id;
+                    	var issue = getCommenter(issueKey);
+                    	var issueContent = JSON.parse(issue.data);
+                    	
+                    	if(issueContent.issues[0].fields.comment !== null){
+                    		var noOfComments = issueContent.issues[0].fields.comment.maxResults;
+                    		
+                    		for(var p=0;p<noOfComments;p++){
+                    			commentDate = issueContent.issues[0].fields.comment.comments[p].created;
+                    			commenter = issueContent.issues[0].fields.comment.comments[p].author.emailAddress;
+                    			
+                    			var query2  = "INSERT INTO ISSUE_COMMENTS (JIRA_KEY, COMMENTED_DATE, COMMENTER) VALUES('"+issueKey+"' , '"+commentDate+"', '"+commenter+"');";
+                    			db.query(query2);
+                    		}
+                    	}
+               		}         													 	
+               }                
+            // ############################################################################################
+            
                 
        }
             
@@ -90,15 +123,94 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 <html lang="en">
 <head>
+
+<style type="text/css">
+
+table.rotationt {
+	table-layout:fixed;
+	overflow: scroll;
+	width: auto;
+}
+
+table.rotationt th {
+	padding: 0.500em;	
+	text-align: center;	
+	height:35px;		
+	
+}
+
+table.rotationt td {
+	padding: 0.500em;
+	text-align: center;	
+	border-right-color: #FFA500;
+	height:30px;
+	
+	
+}
+
+table.rotationt tr:nth-child(odd) { background-color: #edf0f0; }
+
+	/* Push the first cell to the right so it doesn't stick to the table border */
+table.rotationt td:first-child, table.rotationt th:first-child {
+		width: 15%;
+		text-align: center;
+		padding: 0;
+		/*border: none;
+		border-bottom: 1px solid #f8f9fa;*/
+	}
+	
+table.rotationt td:nth-child(2), table.rotationt th:nth-child(2) {
+	width: 25%;
+	text-align: center;
+	padding: 0;
+	/*border: none;
+	border-bottom: 1px solid #f8f9fa;*/
+}
+table.rotationt td:nth-child(3), table.rotationt th:nth-child(2) {
+	width: 30%;
+	text-align: center;
+	padding: 0;
+	/*border: none;
+	border-bottom: 1px solid #f8f9fa;*/
+}
+table.rotationt td:nth-child(4), table.rotationt th:nth-child(2) {
+	width: 30%;
+	text-align: center;
+	padding: 0;
+	/*border: none;
+	border-bottom: 1px solid #f8f9fa;*/
+}
+
+table.rotationt {
+  overflow: hidden;
+}
+
+table.rotationt tr:hover {
+  background-color: #ffd11a;
+}
+
+table.rotationt td, table.rotationt th {
+  position: relative;
+}
+
+
+
+</style>
 </head>
 <body>
 
  <p><% 
+ 
+//  print(issK.fields.comment.maxResults); 
  print("with .data ");
- print(totalIsuuesCreated);
+ print(totalIssuesUpdated);
  %></p>
  
          <p><%  
+//         var testing =JSON.parse(getCommenter("XSHPROD-42").data);
+         
+//         print("getJsonFromKey  ");  
+//         print(testing.issues[0].fields.comment);
         
         %></p>
 
@@ -107,8 +219,8 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                         			<tr >
                                                      <th>ID</th>                                                     
                                                      <th>Key</th>
-                                                     <th>Commented Date</th>
                                                      <th>No of Comments</th> 
+                                                     <th>Commented Date</th>                                                     
                                                      <th>Commenter</th>
 
                                                      
@@ -118,10 +230,13 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                         		
                                         		<tbody>
 														<% 
+												     var noOfComments = 0;
+													 var commentDate = null;
+													 var commenter = null;
 													 	
 													 for(var s=0;s<updatedTotal;s+=1000){ 
 														var issueData = JSON.parse(getUpdates(s).data); 
-														log.debug(issueData);
+
 														
 														if(updatedTotal-s<1000)
 															max = updatedTotal;
@@ -130,26 +245,33 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 														for(var i=0;i<max;i++){ 
 															var issueKey = issueData.issues[i].key;
-															log.debug(issueKey);  %>  <tr>
-															<td><% print(issueData.issues[i].id); %></td>
-															<td><% print(issueKey); %></td>
-															<td><% print(issueData.issues[i].fields.created); %></td>
-															
-														<%	if(issueData.issues[i].fields.creator !== null){  %>															
-															<td><% print(issueData.issues[i].fields.creator.name); %></td>
-														<%	}
-// 															var issueContent = JSON.parse(getJsonFromKey(issueKey).data);
-// 															var issue = getCommentor(issueKey);
-// 															var issueContent = JSON.parse(issue.data);
-															
-// 															if(issueContent.issues[0].fields.comment !== null){  
-// 																var noOfComments = issueContent.issues[0].fields.comment.maxResults;  
-																
-// 															}
+															log.debug(issueKey);
+															var id = issueData.issues[i].id;													
 														
-															%>
-														</tr>
-														<% }
+// 															var issueContent = JSON.parse(getCommenter(issueKey).data);
+															var issue = getCommenter(issueKey);
+															var issueContent = JSON.parse(issue.data);
+															
+															if(issueContent.issues[0].fields.comment !== null){  
+																noOfComments = issueContent.issues[0].fields.comment.maxResults;  
+																	for(var p=0;p<noOfComments;p++){
+																		commentDate = issueContent.issues[0].fields.comment.comments[p].created;
+																		commenter = issueContent.issues[0].fields.comment.comments[p].author.emailAddress; %>
+																		
+																		<tr>
+																		<td><% print(id); %></td>
+																		<td><% print(issueKey); %></td>
+																		<td><% print(noOfComments); %></td>
+																		<td><% print(commentDate); %></td>																		
+																		<td><% print(commenter); %></td>
+																<%	} 
+																
+															} 
+															else{ %>
+																<td colspan="3"><% print(null); %></td> </tr>
+															<%} 
+															
+													     }
 													 	
 
 
