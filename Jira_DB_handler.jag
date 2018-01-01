@@ -5,7 +5,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     var log = new Log();
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
-
+   
     	  var prefix = "https://-/jira/rest/api/2/search";
     	  var prefixForKey = "https://-/jira/rest/api/2/issue/";
 
@@ -15,21 +15,33 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             resultRetrived = true;                
             
         }
+        
+        function getDateDiff(fromdate, toDate){
+        	var date1 = new Date(fromdate);
+        	var date2 = new Date(toDate);
+        	
+	        var timeDiff = date2.getTime() - date1.getTime();	        
+        	var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24)); 
+        	
+        	return diffDays;
+        	
+        }
+        
 	    
 	    function getCreatorTotal(){
-	        return get(prefix ,{jql : "created>=-4d" , maxResults:"0"}, {"Authorization" : ""});
+	        return get(prefix ,{jql : "created>=-70d" , maxResults:"0"}, {"Authorization" : ""});
 	    }
 	    
 	    function getUpdatedTotal(){
-    	    return get(prefix ,{jql : "updated>=-4d" , maxResults:"0"}, {"Authorization" : ""});
+    	    return get(prefix ,{jql : "updated>=-50d" , maxResults:"0"}, {"Authorization" : ""});
     	}
     	
 		function getCreator(index){
-		    return get(prefix ,{jql : "created>=-4d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
+		    return get(prefix ,{jql : "created>=-70d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
 		}
 		
 		function getUpdates(index){
-		    return get(prefix ,{jql : "updated>=-4d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
+		    return get(prefix ,{jql : "updated>=-50d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
 		}
 		
 		function getCommenter(issuekey){
@@ -38,7 +50,14 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 			return a;
 		}
 		     
-       
+
+	var date = new Date();
+	var startdate = new Date(Date.now() - (86400000*14));
+	
+	log.debug(date);
+	log.debug(startdate);
+	log.debug(getDateDiff(startdate,date));
+	
     var config = {};
     var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
 
@@ -66,7 +85,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             					if(issueData.issues[i].fields.creator !== null){ 															
             							creator = issueData.issues[i].fields.creator.name; 
             					}		
-            					var query1  = "INSERT INTO ISSUE_CREATOR (CREATED_DATE, JIRA_KEY, CREATED_BY) VALUES('"+issueData.issues[i].fields.created+"' , '"+issueData.issues[i].key+"', '"+creator+"');";
+            					var query1  = "INSERT INTO ISSUE_CREATER (CREATED_DATE, JIRA_KEY, CREATED_BY) VALUES('"+issueData.issues[i].fields.created+"' , '"+issueData.issues[i].key+"', '"+creator+"');";
             					db.query(query1);
             					creator = null;
             		}         													 	
@@ -85,9 +104,9 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     maxCm= 1000;
                          
                     for(var x=0;x<maxCm;x++){            													
-                    	var issueKey = issueData.issues[x].key;
-                    	
-                    	var id = issueData.issues[x].id;
+                    	var issueKey = updatedIssues.issues[x].key;
+                    	log.debug(issueKey);
+                    	var id = updatedIssues.issues[x].id;
                     	var issue = getCommenter(issueKey);
                     	var issueContent = JSON.parse(issue.data);
                     	
@@ -97,9 +116,17 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     		for(var p=0;p<noOfComments;p++){
                     			commentDate = issueContent.issues[0].fields.comment.comments[p].created;
                     			commenter = issueContent.issues[0].fields.comment.comments[p].author.emailAddress;
+                    			var splittedDate = commentDate.split('-')[0]+"-"+commentDate.split('-')[1]+"-"+commentDate.split('-')[2]+"Z";
+                    			var csDate = new Date(splittedDate);
+
+                    			if(getDateDiff(csDate,date)<14){
+                    				log.debug("Inside the date range checker for PMT_Jira Database");	
+                    				
+                    				var query2  = "INSERT INTO ISSUE_COMMENTS (JIRA_KEY, COMMENTED_DATE, COMMENTER) VALUES('"+issueKey+"' , '"+commentDate+"', '"+commenter+"');";
+                    				db.query(query2);
+                    			}
                     			
-                    			var query2  = "INSERT INTO ISSUE_COMMENTS (JIRA_KEY, COMMENTED_DATE, COMMENTER) VALUES('"+issueKey+"' , '"+commentDate+"', '"+commenter+"');";
-                    			db.query(query2);
+                    			
                     		}
                     	}
                		}         													 	
@@ -200,19 +227,10 @@ table.rotationt td, table.rotationt th {
 <body>
 
  <p><% 
- 
-//  print(issK.fields.comment.maxResults); 
  print("with .data ");
  print(totalIssuesUpdated);
  %></p>
  
-         <p><%  
-//         var testing =JSON.parse(getCommenter("XSHPROD-42").data);
-         
-//         print("getJsonFromKey  ");  
-//         print(testing.issues[0].fields.comment);
-        
-        %></p>
 
  <table id="rotationt" class="rotationt"  style="width:100%">
                                              <thead>
@@ -245,7 +263,7 @@ table.rotationt td, table.rotationt th {
 
 														for(var i=0;i<max;i++){ 
 															var issueKey = issueData.issues[i].key;
-															log.debug(issueKey);
+														
 															var id = issueData.issues[i].id;													
 														
 // 															var issueContent = JSON.parse(getCommenter(issueKey).data);
@@ -256,7 +274,15 @@ table.rotationt td, table.rotationt th {
 																noOfComments = issueContent.issues[0].fields.comment.maxResults;  
 																	for(var p=0;p<noOfComments;p++){
 																		commentDate = issueContent.issues[0].fields.comment.comments[p].created;
-																		commenter = issueContent.issues[0].fields.comment.comments[p].author.emailAddress; %>
+																		commenter = issueContent.issues[0].fields.comment.comments[p].author.emailAddress; 
+																		log.debug(commentDate);
+																		var splitted = commentDate.split('-')[0]+"-"+commentDate.split('-')[1]+"-"+commentDate.split('-')[2]+"Z";
+																		log.debug(splitted);
+																		var cDate = new Date(splitted);														
+
+																		log.debug(getDateDiff(cDate,date));
+																		if(getDateDiff(cDate,date)<14){ 
+																			log.debug("Inside the date range checker of HTML Table");								 %>
 																		
 																		<tr>
 																		<td><% print(id); %></td>
@@ -264,7 +290,9 @@ table.rotationt td, table.rotationt th {
 																		<td><% print(noOfComments); %></td>
 																		<td><% print(commentDate); %></td>																		
 																		<td><% print(commenter); %></td>
-																<%	} 
+																<%
+																    }
+																} 
 																
 															} 
 															else{ %>
