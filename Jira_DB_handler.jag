@@ -5,7 +5,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     var log = new Log();
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
-   
+
     	  var prefix = "https://-/jira/rest/api/2/search";
     	  var prefixForKey = "https://-/jira/rest/api/2/issue/";
 
@@ -231,6 +231,7 @@ table.rotationt td, table.rotationt th {
  print(totalIssuesUpdated);
  %></p>
  
+      
 
  <table id="rotationt" class="rotationt"  style="width:100%">
                                              <thead>
