@@ -29,19 +29,27 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
         
 	    
 	    function getCreatorTotal(){
-	        return get(prefix ,{jql : "created>=-70d" , maxResults:"0"}, {"Authorization" : ""});
+	        return get(prefix ,{jql : "created>=-0d" , maxResults:"0"}, {"Authorization" : "Basic "});
 	    }
 	    
 	    function getUpdatedTotal(){
-    	    return get(prefix ,{jql : "updated>=-50d" , maxResults:"0"}, {"Authorization" : ""});
+    	    return get(prefix ,{jql : "updated>=-0d" , maxResults:"0"}, {"Authorization" : "Basic "});
+    	}
+    	
+    	function getResolutionTotal(){
+    	   	return get(prefix ,{jql : "resolutiondate>=-250d" , maxResults:"0"}, {"Authorization" : ""});
     	}
     	
 		function getCreator(index){
-		    return get(prefix ,{jql : "created>=-70d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
+		    return get(prefix ,{jql : "created>=-0d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
 		}
 		
 		function getUpdates(index){
-		    return get(prefix ,{jql : "updated>=-50d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
+		    return get(prefix ,{jql : "updated>=-0d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : "Basic YXNoYW5Ad3NvMi5jb206YXNoYW4xMjM="});
+		}
+		
+		function getResolution(index){
+		    return get(prefix ,{jql : "resolutiondate>=-250d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
 		}
 		
 		function getCommenter(issuekey){
@@ -49,10 +57,17 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 			var a = get(prefix ,{jql : param1, "fields":"comment"},{ "Authorization" : ""});
 			return a;
 		}
+		
+		function getResolver(issuekey){
+			var keyParam = "key="+issuekey ;
+			var resData = get(prefix ,{jql : keyParam, "expand":"changelog"},{ "Authorization" : ""});
+			return resData;
+		}
 		     
 
 	var date = new Date();
 	var startdate = new Date(Date.now() - (86400000*14));
+
 	
 	log.debug(date);
 	log.debug(startdate);
@@ -65,10 +80,13 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     try {
     	
     	    var totalIssuesCreated = JSON.parse(getCreatorTotal().data);   
-    	    var totalIssuesUpdated = JSON.parse(getUpdatedTotal().data);   
+    	    var totalIssuesUpdated = JSON.parse(getUpdatedTotal().data);  
+    	    var totalIssuesResolved = JSON.parse(getResolutionTotal().data);
                                     
             var createdTotal = totalIssuesCreated.total;
             var updatedTotal = totalIssuesUpdated.total;
+            var resolutionTotal = totalIssuesResolved.total;
+                        
             
             // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
             var creator = null;
@@ -89,7 +107,8 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             					db.query(query1);
             					creator = null;
             		}         													 	
-             }           								
+             }     
+             log.debug("Insertion in to ISSUE_CREATOR finished successfully.");
             // #################### INSERT COMMENTING DATA IN TO ISSUE_COMMENTS TABLE #####################
 			  var commentDate = null;
 			  var commenter = null;
@@ -131,6 +150,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     	}
                		}         													 	
                }                
+               log.debug("Insertion in to ISSUE_COMMENTS finished successfully.");
             // ############################################################################################
             
                 
@@ -224,98 +244,48 @@ table.rotationt td, table.rotationt th {
 
 </style>
 </head>
-<body>
+<body><%
+			  var commentDate = null;
+			  var commenter = null;
+			  var maxCr = 0;
+                         
+             for(var s=0;s<resolutionTotal;s+=1000){
+                 var resolvedIssues = JSON.parse(getResolution(s).data); 		
+                 log.debug(resolvedIssues);
+                 if(resolutionTotal-s<1000)
+                    maxCr = resolutionTotal;
+                 else 
+                    maxCr= 1000;
+                         
+                    for(var x=0;x<maxCr;x++){            													
+                    	var reIssueKey = resolvedIssues.issues[x].key;
+                    	log.debug(reIssueKey);
+                    	
+                    	var reIssue = getResolver(reIssueKey);
+                    	var reIssueContent = JSON.parse(reIssue.data); 
 
- <p><% 
- print("with .data ");
- print(totalIssuesUpdated);
- %></p>
- 
-      
+                    	var reDate = reIssueContent.issues[0].fields.resolutiondate;
+                    	
+                    	var historyCount = reIssueContent.issues[0].changelog.total;
+                    	
+                    	for(var p=0;p<historyCount;p++){
+                    		var changedDate = reIssueContent.issues[0].changelog.histories[p].created;
+                    		
+                    		if(reDate == changedDate){
+                    			var resolver = reIssueContent.issues[0].changelog.histories[p].author.name; %>
+                    			<p><% print(resolver); %></p>
+                    			<p><% print(changedDate); %></p>
+                    		<% }
 
- <table id="rotationt" class="rotationt"  style="width:100%">
-                                             <thead>
-                                        			<tr >
-                                                     <th>ID</th>                                                     
-                                                     <th>Key</th>
-                                                     <th>No of Comments</th> 
-                                                     <th>Commented Date</th>                                                     
-                                                     <th>Commenter</th>
-
-                                                     
-                                                                                
-                                        			</tr>
-                                        		</thead>
-                                        		
-                                        		<tbody>
-														<% 
-												     var noOfComments = 0;
-													 var commentDate = null;
-													 var commenter = null;
-													 	
-													 for(var s=0;s<updatedTotal;s+=1000){ 
-														var issueData = JSON.parse(getUpdates(s).data); 
-
-														
-														if(updatedTotal-s<1000)
-															max = updatedTotal;
-														else 
-															max= 1000;
-
-														for(var i=0;i<max;i++){ 
-															var issueKey = issueData.issues[i].key;
-														
-															var id = issueData.issues[i].id;													
-														
-// 															var issueContent = JSON.parse(getCommenter(issueKey).data);
-															var issue = getCommenter(issueKey);
-															var issueContent = JSON.parse(issue.data);
-															
-															if(issueContent.issues[0].fields.comment !== null){  
-																noOfComments = issueContent.issues[0].fields.comment.maxResults;  
-																	for(var p=0;p<noOfComments;p++){
-																		commentDate = issueContent.issues[0].fields.comment.comments[p].created;
-																		commenter = issueContent.issues[0].fields.comment.comments[p].author.emailAddress; 
-																		log.debug(commentDate);
-																		var splitted = commentDate.split('-')[0]+"-"+commentDate.split('-')[1]+"-"+commentDate.split('-')[2]+"Z";
-																		log.debug(splitted);
-																		var cDate = new Date(splitted);														
-
-																		log.debug(getDateDiff(cDate,date));
-																		if(getDateDiff(cDate,date)<14){ 
-																			log.debug("Inside the date range checker of HTML Table");								 %>
-																		
-																		<tr>
-																		<td><% print(id); %></td>
-																		<td><% print(issueKey); %></td>
-																		<td><% print(noOfComments); %></td>
-																		<td><% print(commentDate); %></td>																		
-																		<td><% print(commenter); %></td>
-																<%
-																    }
-																} 
-																
-															} 
-															else{ %>
-																<td colspan="3"><% print(null); %></td> </tr>
-															<%} 
-															
-													     }
-													 	
-
-
-													 }
-								
-													
-                                        			%>
-                                        		</tbody>
-                                           		 
-                                                   
-                                                   
-                                                 </table>
-
-   
-
+                    	}
+                    	
+                    	
+                    	%>
+                    	
+                    	<p> <% //print(reIssueContent); %> </p>
+               		<% }         													 	
+               }            
+   %>
 </body>
 </html>
 
