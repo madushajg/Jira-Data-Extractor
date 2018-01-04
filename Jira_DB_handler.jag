@@ -5,9 +5,9 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     var log = new Log();
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
-
+    
     	  var prefix = "https://-/jira/rest/api/2/search";
-    	  var prefixForKey = "https://-/jira/rest/api/2/issue/";
+    	  var supJiraURL = data.jira_db.supportJiraURL;
 
     var resultRetrived = false;
     
@@ -29,15 +29,15 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
         
 	    
 	    function getCreatorTotal(){
-	        return get(prefix ,{jql : "created>=-0d" , maxResults:"0"}, {"Authorization" : "Basic "});
+	        return get(prefix ,{jql : "created>=-0d" , maxResults:"0"}, {"Authorization" : ""});
 	    }
 	    
 	    function getUpdatedTotal(){
-    	    return get(prefix ,{jql : "updated>=-0d" , maxResults:"0"}, {"Authorization" : "Basic "});
+    	    return get(prefix ,{jql : "updated>=-0d" , maxResults:"0"}, {"Authorization" : ""});
     	}
     	
     	function getResolutionTotal(){
-    	   	return get(prefix ,{jql : "resolutiondate>=-250d" , maxResults:"0"}, {"Authorization" : ""});
+    	   	return get(prefix ,{jql : "resolutiondate>=-289d" , maxResults:"0"}, {"Authorization" : ""});
     	}
     	
 		function getCreator(index){
@@ -45,11 +45,11 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 		}
 		
 		function getUpdates(index){
-		    return get(prefix ,{jql : "updated>=-0d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : "Basic YXNoYW5Ad3NvMi5jb206YXNoYW4xMjM="});
+		    return get(prefix ,{jql : "updated>=-0d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
 		}
 		
 		function getResolution(index){
-		    return get(prefix ,{jql : "resolutiondate>=-250d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
+		    return get(prefix ,{jql : "resolutiondate>=-289d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
 		}
 		
 		function getCommenter(issuekey){
@@ -67,7 +67,6 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 	var date = new Date();
 	var startdate = new Date(Date.now() - (86400000*14));
-
 	
 	log.debug(date);
 	log.debug(startdate);
@@ -151,6 +150,45 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                		}         													 	
                }                
                log.debug("Insertion in to ISSUE_COMMENTS finished successfully.");
+            // #################### INSERT RESOLUTION DATA IN TO ISSUE_RESOLUTION TABLE #####################
+               var maxCr = 0;
+                                        
+                            for(var s=0;s<resolutionTotal;s+=1000){
+                                var resolvedIssues = JSON.parse(getResolution(s).data); 		
+                                log.debug(resolvedIssues);
+                                if(resolutionTotal-s<1000)
+                                   maxCr = resolutionTotal;
+                                else 
+                                   maxCr= 1000;
+                                        
+                                   for(var x=0;x<maxCr;x++){            													
+                                   	var reIssueKey = resolvedIssues.issues[x].key;
+                                   	var reUrl = supJiraURL+reIssueKey;
+                                   	log.debug(reIssueKey);
+                                   	
+                                   	var reIssue = getResolver(reIssueKey);
+                                   	var reIssueContent = JSON.parse(reIssue.data); 
+               
+                                   	var reDate = reIssueContent.issues[0].fields.resolutiondate;
+                                   	
+                                   	var historyCount = reIssueContent.issues[0].changelog.total;
+                                   	
+                                   	for(var p=0;p<historyCount;p++){
+                                   		var changedDate = reIssueContent.issues[0].changelog.histories[p].created;
+                                   		
+                                   		if(reDate == changedDate){
+                                   			log.debug("Inside the date comparator for PMT_Jira Database");
+                                   			var resolver = reIssueContent.issues[0].changelog.histories[p].author.name;
+
+                                   			var query3  = "INSERT INTO ISSUE_RESOLUTION (JIRA_KEY,JIRA_URL,RESOLVED_DATE, RESOLVED_BY) VALUES('"+reIssueKey+"','"+reUrl+"', '"+reDate+"', '"+resolver+"');";
+                                   			db.query(query3);
+                                   			break;
+                                   		}
+               
+                                   	}                                   	
+                              	 }         													 	
+                              }                
+               log.debug("Insertion in to ISSUE_RESOLUTION finished successfully.");
             // ############################################################################################
             
                 
@@ -244,10 +282,26 @@ table.rotationt td, table.rotationt th {
 
 </style>
 </head>
-<body><%
-			  var commentDate = null;
-			  var commenter = null;
-			  var maxCr = 0;
+<body>
+<table id="rotationt" class="rotationt"  style="width:100%">
+                                             <thead>
+                                        			<tr >                                                   
+                                                     <th>Key</th>
+                                                     <th>URL</th>
+                                                     <th>Resolved Date</th>   
+                                                     <th>Inside Date</th>                                                   
+                                                     <th>Resolver</th>
+
+                                                     
+                                                                                
+                                        			</tr>
+                                        		</thead>
+                                        		
+                                        		<tbody>
+
+
+<%
+			 var maxCr = 0;
                          
              for(var s=0;s<resolutionTotal;s+=1000){
                  var resolvedIssues = JSON.parse(getResolution(s).data); 		
@@ -259,6 +313,7 @@ table.rotationt td, table.rotationt th {
                          
                     for(var x=0;x<maxCr;x++){            													
                     	var reIssueKey = resolvedIssues.issues[x].key;
+                    	var ur = supJiraURL+reIssueKey;
                     	log.debug(reIssueKey);
                     	
                     	var reIssue = getResolver(reIssueKey);
@@ -273,19 +328,29 @@ table.rotationt td, table.rotationt th {
                     		
                     		if(reDate == changedDate){
                     			var resolver = reIssueContent.issues[0].changelog.histories[p].author.name; %>
-                    			<p><% print(resolver); %></p>
-                    			<p><% print(changedDate); %></p>
+                    			<tr>
+                    			<td><% print(reIssueKey); %></td>
+                    			<td><a href="<% print(ur); %>"><% print(ur); %>  </a></td>
+                    			<td><% print(reDate); %></td>
+                    			<td><% print(changedDate); %></td>
+                    			<td><% print(resolver); %></td>
+                    			</tr>
                     		<% }
 
                     	}
                     	
                     	
-                    	%>
                     	
-                    	<p> <% //print(reIssueContent); %> </p>
-               		<% }         													 	
-               }            
+                    	
+                    	
+               		 }         													 	
+               } 
+
+               
    %>
+   
+   </tbody>
+   </table>
 </body>
 </html>
 
