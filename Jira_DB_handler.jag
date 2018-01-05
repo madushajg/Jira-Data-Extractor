@@ -63,10 +63,18 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 			var resData = get(prefix ,{jql : keyParam, "expand":"changelog"},{ "Authorization" : ""});
 			return resData;
 		}
+		
+		function getWorklog(issuekey){
+			var wlParam = "key="+issuekey ;
+			var wlData = get(prefix ,{jql : keyParam, "fields":"worklog"},{ "Authorization" : ""});
+			return wlData;
+		}
 		     
 
 	var date = new Date();
 	var startdate = new Date(Date.now() - (86400000*14));
+// 	var yesterday = new Date(Date.now() - 86400000);
+
 	
 	log.debug(date);
 	log.debug(startdate);
@@ -108,7 +116,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             		}         													 	
              }     
              log.debug("Insertion in to ISSUE_CREATOR finished successfully.");
-            // #################### INSERT COMMENTING DATA IN TO ISSUE_COMMENTS TABLE #####################
+            // #################### INSERT COMMENTING & WORKLOG DATA IN TO TABLES #####################
 			  var commentDate = null;
 			  var commenter = null;
 			  var maxCm = 0;
@@ -125,8 +133,9 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     	var issueKey = updatedIssues.issues[x].key;
                     	log.debug(issueKey);
                     	var id = updatedIssues.issues[x].id;
+                    	// #################### INSERT COMMENTING DATA IN TO ISSUE_COMMENTS TABLE #####################
                     	var issue = getCommenter(issueKey);
-                    	var issueContent = JSON.parse(issue.data);
+                    	var issueContent = JSON.parse(issue.data); 
                     	
                     	if(issueContent.issues[0].fields.comment !== null){
                     		var noOfComments = issueContent.issues[0].fields.comment.maxResults;
@@ -142,11 +151,21 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     				
                     				var query2  = "INSERT INTO ISSUE_COMMENTS (JIRA_KEY, COMMENTED_DATE, COMMENTER) VALUES('"+issueKey+"' , '"+commentDate+"', '"+commenter+"');";
                     				db.query(query2);
-                    			}
-                    			
-                    			
-                    		}
+                    			}                   			
+                      		}
                     	}
+                    	// #################### INSERT WORKLOG DATA IN TO ISSUE_WORKLOG TABLE #####################
+                    	var worklog = getWorklog(issueKey);
+                    	var worklogContent = JSON.parse(worklog.data);
+                    	var wlTotal = worklogContent.issues[0].fields.worklog.total;
+                    	if(wlTotal-s<20)
+                    	    maxCm = wlTotal;
+                    	else 
+                    	    maxCm= 1000;
+                    	
+                    	
+                    	
+                    	// #############################################################################################
                		}         													 	
                }                
                log.debug("Insertion in to ISSUE_COMMENTS finished successfully.");
@@ -301,9 +320,9 @@ table.rotationt td, table.rotationt th {
 
 
 <%
-			 var maxCr = 0;
+			 var maxWl = 0;
                          
-             for(var s=0;s<resolutionTotal;s+=1000){
+             for(var s=0;s<updatedTotal;s+=1000){
                  var resolvedIssues = JSON.parse(getResolution(s).data); 		
                  log.debug(resolvedIssues);
                  if(resolutionTotal-s<1000)
