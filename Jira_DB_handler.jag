@@ -6,14 +6,13 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
     
-    	  var prefix = "https://-/jira/rest/api/2/search";
-    	  var supJiraURL = data.jira_db.supportJiraURL;
+    	  var supJiraURL = data.jira_db.supportJiraURL;  
+    	  var prefix = data.jira_db.urlForJQL;
 
     var resultRetrived = false;
     
     if(("success").equals(reqFromUser)){
-            resultRetrived = true;                
-            
+            resultRetrived = true;               
         }
         
         function getDateDiff(fromdate, toDate){
@@ -23,62 +22,42 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 	        var timeDiff = date2.getTime() - date1.getTime();	        
         	var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24)); 
         	
-        	return diffDays;
-        	
+        	return diffDays;        	
         }
-        
-	    
-	    function getCreatorTotal(){
-	        return get(prefix ,{jql : "created>=-0d" , maxResults:"0"}, {"Authorization" : ""});
-	    }
-	    
-	    function getUpdatedTotal(){
-    	    return get(prefix ,{jql : "updated>=-0d" , maxResults:"0"}, {"Authorization" : ""});
-    	}
-    	
-    	function getResolutionTotal(){
-    	   	return get(prefix ,{jql : "resolutiondate>=-289d" , maxResults:"0"}, {"Authorization" : ""});
-    	}
-    	
-		function getCreator(index){
-		    return get(prefix ,{jql : "created>=-0d" , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, {"Authorization" : ""});
-		}
-		
-		function getUpdates(index){
-		    return get(prefix ,{jql : "updated>=-0d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
-		}
-		
-		function getResolution(index){
-		    return get(prefix ,{jql : "resolutiondate>=-289d" , maxResults:"1000", "startAt":index, "fields":"*none"}, {"Authorization" : ""});
-		}
-		
-		function getCommenter(issuekey){
-			var param1 = "key="+issuekey ;
-			var a = get(prefix ,{jql : param1, "fields":"comment"},{ "Authorization" : ""});
-			return a;
-		}
-		
-		function getResolver(issuekey){
-			var keyParam = "key="+issuekey ;
-			var resData = get(prefix ,{jql : keyParam, "expand":"changelog"},{ "Authorization" : ""});
-			return resData;
-		}
-		
-		function getWorklog(issuekey){
-			var wlParam = "key="+issuekey ;
-			var wlData = get(prefix ,{jql : keyParam, "fields":"worklog"},{ "Authorization" : ""});
-			return wlData;
-		}
-		     
 
+		function getTotal(category,days){
+			//This function returns the total number of records available for the given category (created, updated, resolutiondate ).
+			var para = category+">=-"+days+"d";
+			return get(prefix ,{jql : para , maxResults:"0"}, data.supportJiraAuthorization);
+		}	
+
+		function getInside(category,days,index){
+			//This function returns every issue key for the given catogory (created, updated, resolutiondate ).
+			//days parameter represents the number of days to be concedered in the past from today.
+			var para = category+">=-"+days+"d";
+			if(category=="created")
+				return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, data.supportJiraAuthorization); 
+			else			
+			    return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"*none"},data.supportJiraAuthorization);
+		}
+		
+		function getJsonFromIssueKey(issuekey,contentType){
+			//This function returns the content for a given issue key as per the contentType. (comment ,changelog )
+			var param = "key="+issuekey ;
+			if(contentType=="comment")
+				return get(prefix ,{jql : param, "fields":"comment"},data.supportJiraAuthorization);
+			else if(contentType=="changelog")
+				return get(prefix ,{jql : param, "expand":"changelog"},data.supportJiraAuthorization);
+			else
+				return null;			
+		}					
+  
 	var date = new Date();
 	var startdate = new Date(Date.now() - (86400000*14));
-// 	var yesterday = new Date(Date.now() - 86400000);
 
 	
 	log.debug(date);
 	log.debug(startdate);
-	log.debug(getDateDiff(startdate,date));
 	
     var config = {};
     var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
@@ -86,9 +65,12 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
     try {
     	
-    	    var totalIssuesCreated = JSON.parse(getCreatorTotal().data);   
-    	    var totalIssuesUpdated = JSON.parse(getUpdatedTotal().data);  
-    	    var totalIssuesResolved = JSON.parse(getResolutionTotal().data);
+    		var totalIssuesCreated = JSON.parse(getTotal("created","0").data);
+    		log.debug(totalIssuesCreated);
+    	    var totalIssuesUpdated = JSON.parse(getTotal("updated","10").data);
+    	    log.debug(totalIssuesUpdated);
+    	    var totalIssuesResolved = JSON.parse(getTotal("resolutiondate","290").data);
+    	    log.debug(totalIssuesResolved);
                                     
             var createdTotal = totalIssuesCreated.total;
             var updatedTotal = totalIssuesUpdated.total;
@@ -100,7 +82,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             var maxCr = 0;
             
             for(var s=0;s<createdTotal;s+=1000){
-            	var issueData = JSON.parse(getCreator(s).data); 							
+            	var issueData = JSON.parse(getInside("created","0",s).data); 							
             	if(createdTotal-s<1000)
             		maxCr = createdTotal;
             	else 
@@ -109,20 +91,23 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             		for(var i=0;i<maxCr;i++){            													
             					if(issueData.issues[i].fields.creator !== null){ 															
             							creator = issueData.issues[i].fields.creator.name; 
-            					}		
-            					var query1  = "INSERT INTO ISSUE_CREATER (CREATED_DATE, JIRA_KEY, CREATED_BY) VALUES('"+issueData.issues[i].fields.created+"' , '"+issueData.issues[i].key+"', '"+creator+"');";
+            					}
+								var crKey = issueData.issues[i].key;
+								var crUrl = supJiraURL+crKey;
+            					
+            					var query1  = "INSERT INTO ISSUE_CREATER (JIRA_KEY, JIRA_URL, CREATED_DATE, CREATED_BY) VALUES('"+crKey+"', '"+crUrl+"','"+issueData.issues[i].fields.created+"' , '"+creator+"');";
             					db.query(query1);
             					creator = null;
             		}         													 	
              }     
              log.debug("Insertion in to ISSUE_CREATOR finished successfully.");
-            // #################### INSERT COMMENTING & WORKLOG DATA IN TO TABLES #####################
+            // #################### INSERT COMMENTING IN TO ISSUE_COMMENTS TABLE #####################
 			  var commentDate = null;
 			  var commenter = null;
 			  var maxCm = 0;
                          
              for(var s=0;s<updatedTotal;s+=1000){
-                 var updatedIssues = JSON.parse(getUpdates(s).data); 		
+                 var updatedIssues = JSON.parse(getInside("updated","10",s).data); 		
                  log.debug(updatedIssues);
                  if(updatedTotal-s<1000)
                     maxCm = updatedTotal;
@@ -131,11 +116,11 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                          
                     for(var x=0;x<maxCm;x++){            													
                     	var issueKey = updatedIssues.issues[x].key;
+                    	var comUrl = supJiraURL+issueKey;
                     	log.debug(issueKey);
-                    	var id = updatedIssues.issues[x].id;
-                    	// #################### INSERT COMMENTING DATA IN TO ISSUE_COMMENTS TABLE #####################
-                    	var issue = getCommenter(issueKey);
+                    	var issue = getJsonFromIssueKey(issueKey,"comment");
                     	var issueContent = JSON.parse(issue.data); 
+                    	log.debug(issueContent);
                     	
                     	if(issueContent.issues[0].fields.comment !== null){
                     		var noOfComments = issueContent.issues[0].fields.comment.maxResults;
@@ -149,23 +134,11 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     			if(getDateDiff(csDate,date)<14){
                     				log.debug("Inside the date range checker for PMT_Jira Database");	
                     				
-                    				var query2  = "INSERT INTO ISSUE_COMMENTS (JIRA_KEY, COMMENTED_DATE, COMMENTER) VALUES('"+issueKey+"' , '"+commentDate+"', '"+commenter+"');";
+                    				var query2  = "INSERT INTO ISSUE_COMMENTS (JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTER) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
                     				db.query(query2);
                     			}                   			
                       		}
                     	}
-                    	// #################### INSERT WORKLOG DATA IN TO ISSUE_WORKLOG TABLE #####################
-                    	var worklog = getWorklog(issueKey);
-                    	var worklogContent = JSON.parse(worklog.data);
-                    	var wlTotal = worklogContent.issues[0].fields.worklog.total;
-                    	if(wlTotal-s<20)
-                    	    maxCm = wlTotal;
-                    	else 
-                    	    maxCm= 1000;
-                    	
-                    	
-                    	
-                    	// #############################################################################################
                		}         													 	
                }                
                log.debug("Insertion in to ISSUE_COMMENTS finished successfully.");
@@ -173,7 +146,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                var maxCr = 0;
                                         
                             for(var s=0;s<resolutionTotal;s+=1000){
-                                var resolvedIssues = JSON.parse(getResolution(s).data); 		
+                                var resolvedIssues = JSON.parse(getInside("resolutiondate","290",s).data); 		
                                 log.debug(resolvedIssues);
                                 if(resolutionTotal-s<1000)
                                    maxCr = resolutionTotal;
@@ -185,7 +158,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                    	var reUrl = supJiraURL+reIssueKey;
                                    	log.debug(reIssueKey);
                                    	
-                                   	var reIssue = getResolver(reIssueKey);
+                                   	var reIssue = getJsonFromIssueKey(reIssueKey,"changelog");
                                    	var reIssueContent = JSON.parse(reIssue.data); 
                
                                    	var reDate = reIssueContent.issues[0].fields.resolutiondate;
@@ -302,74 +275,7 @@ table.rotationt td, table.rotationt th {
 </style>
 </head>
 <body>
-<table id="rotationt" class="rotationt"  style="width:100%">
-                                             <thead>
-                                        			<tr >                                                   
-                                                     <th>Key</th>
-                                                     <th>URL</th>
-                                                     <th>Resolved Date</th>   
-                                                     <th>Inside Date</th>                                                   
-                                                     <th>Resolver</th>
-
-                                                     
-                                                                                
-                                        			</tr>
-                                        		</thead>
-                                        		
-                                        		<tbody>
-
-
-<%
-			 var maxWl = 0;
-                         
-             for(var s=0;s<updatedTotal;s+=1000){
-                 var resolvedIssues = JSON.parse(getResolution(s).data); 		
-                 log.debug(resolvedIssues);
-                 if(resolutionTotal-s<1000)
-                    maxCr = resolutionTotal;
-                 else 
-                    maxCr= 1000;
-                         
-                    for(var x=0;x<maxCr;x++){            													
-                    	var reIssueKey = resolvedIssues.issues[x].key;
-                    	var ur = supJiraURL+reIssueKey;
-                    	log.debug(reIssueKey);
-                    	
-                    	var reIssue = getResolver(reIssueKey);
-                    	var reIssueContent = JSON.parse(reIssue.data); 
-
-                    	var reDate = reIssueContent.issues[0].fields.resolutiondate;
-                    	
-                    	var historyCount = reIssueContent.issues[0].changelog.total;
-                    	
-                    	for(var p=0;p<historyCount;p++){
-                    		var changedDate = reIssueContent.issues[0].changelog.histories[p].created;
-                    		
-                    		if(reDate == changedDate){
-                    			var resolver = reIssueContent.issues[0].changelog.histories[p].author.name; %>
-                    			<tr>
-                    			<td><% print(reIssueKey); %></td>
-                    			<td><a href="<% print(ur); %>"><% print(ur); %>  </a></td>
-                    			<td><% print(reDate); %></td>
-                    			<td><% print(changedDate); %></td>
-                    			<td><% print(resolver); %></td>
-                    			</tr>
-                    		<% }
-
-                    	}
-                    	
-                    	
-                    	
-                    	
-                    	
-               		 }         													 	
-               } 
-
-               
-   %>
-   
-   </tbody>
-   </table>
+<p>All the data has successfully inserted in to database.</p>
 </body>
 </html>
 
