@@ -6,8 +6,9 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
     
-    	  var supJiraURL = data.jira_db.supportJiraURL;  
-    	  var prefix = data.jira_db.urlForJQL;
+    	  var supJiraURL = data.jira_db.supportJiraURL;
+    	  var supportPrefix = data.jira_db.urlForJQLsup;
+    	  var publicPrefix = data.jira_db.urlForJQLpublic;
 
     var resultRetrived = false;
     
@@ -25,23 +26,23 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
         	return diffDays;        	
         }
 
-		function getTotal(category,days){
+		function getTotal(prefix,category,days){
 			//This function returns the total number of records available for the given category (created, updated, resolutiondate ).
 			var para = category+">=-"+days+"d";
 			return get(prefix ,{jql : para , maxResults:"0"}, data.supportJiraAuthorization);
 		}	
 
-		function getInside(category,days,index){
+		function getInside(prefix,category,days,index){
 			//This function returns every issue key for the given catogory (created, updated, resolutiondate ).
 			//days parameter represents the number of days to be concedered in the past from today.
 			var para = category+">=-"+days+"d";
 			if(category=="created")
-				return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"creator,reporter,created"}, data.supportJiraAuthorization); 
+				return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"creator,created"}, data.supportJiraAuthorization); 
 			else			
 			    return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"*none"},data.supportJiraAuthorization);
 		}
 		
-		function getJsonFromIssueKey(issuekey,contentType){
+		function getJsonFromIssueKey(prefix,issuekey,contentType){
 			//This function returns the content for a given issue key as per the contentType. (comment ,changelog )
 			var param = "key="+issuekey ;
 			if(contentType=="comment")
@@ -54,7 +55,6 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
   
 	var date = new Date();
 	var startdate = new Date(Date.now() - (86400000*14));
-
 	
 	log.debug(date);
 	log.debug(startdate);
@@ -64,17 +64,27 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 
     try {
-    	
-    		var totalIssuesCreated = JSON.parse(getTotal("created","0").data);
+    	  
+    		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created","20").data);
+    		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created","20").data);
     		log.debug(totalIssuesCreated);
-    	    var totalIssuesUpdated = JSON.parse(getTotal("updated","10").data);
+    		log.debug(totalIssuesCreatedPublic);
+    	    var totalIssuesUpdated = JSON.parse(getTotal(supportPrefix,"updated","8").data);
+    	    var totalIssuesUpdatedPublic = JSON.parse(getTotal(publicPrefix,"updated","8").data);
     	    log.debug(totalIssuesUpdated);
-    	    var totalIssuesResolved = JSON.parse(getTotal("resolutiondate","290").data);
+    	    log.debug(totalIssuesUpdatedPublic);
+    	    var totalIssuesResolved = JSON.parse(getTotal(supportPrefix,"resolutiondate","290").data);
+    	    var totalIssuesResolvedPublic = JSON.parse(getTotal(publicPrefix,"resolutiondate","290").data);
     	    log.debug(totalIssuesResolved);
+    	    log.debug(totalIssuesResolvedPublic);
                                     
             var createdTotal = totalIssuesCreated.total;
+            var createdTotalPublic = totalIssuesCreatedPublic.total;
             var updatedTotal = totalIssuesUpdated.total;
+            var updatedTotalPublic = totalIssuesUpdatedPublic.total;
             var resolutionTotal = totalIssuesResolved.total;
+            var resolutionTotalPublic = totalIssuesResolvedPublic.total;
+            
                         
             
             // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
@@ -82,7 +92,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             var maxCr = 0;
             
             for(var s=0;s<createdTotal;s+=1000){
-            	var issueData = JSON.parse(getInside("created","0",s).data); 							
+            	var issueData = JSON.parse(getInside(supportPrefix,"created","20",s).data); 							
             	if(createdTotal-s<1000)
             		maxCr = createdTotal;
             	else 
@@ -107,7 +117,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 			  var maxCm = 0;
                          
              for(var s=0;s<updatedTotal;s+=1000){
-                 var updatedIssues = JSON.parse(getInside("updated","10",s).data); 		
+                 var updatedIssues = JSON.parse(getInside(supportPrefix,"updated","8",s).data); 		
                  log.debug(updatedIssues);
                  if(updatedTotal-s<1000)
                     maxCm = updatedTotal;
@@ -118,7 +128,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     	var issueKey = updatedIssues.issues[x].key;
                     	var comUrl = supJiraURL+issueKey;
                     	log.debug(issueKey);
-                    	var issue = getJsonFromIssueKey(issueKey,"comment");
+                    	var issue = getJsonFromIssueKey(supportPrefix,issueKey,"comment");
                     	var issueContent = JSON.parse(issue.data); 
                     	log.debug(issueContent);
                     	
@@ -146,7 +156,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                var maxCr = 0;
                                         
                             for(var s=0;s<resolutionTotal;s+=1000){
-                                var resolvedIssues = JSON.parse(getInside("resolutiondate","290",s).data); 		
+                                var resolvedIssues = JSON.parse(getInside(supportPrefix,"resolutiondate","290",s).data); 		
                                 log.debug(resolvedIssues);
                                 if(resolutionTotal-s<1000)
                                    maxCr = resolutionTotal;
@@ -158,7 +168,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                    	var reUrl = supJiraURL+reIssueKey;
                                    	log.debug(reIssueKey);
                                    	
-                                   	var reIssue = getJsonFromIssueKey(reIssueKey,"changelog");
+                                   	var reIssue = getJsonFromIssueKey(supportPrefix,reIssueKey,"changelog");
                                    	var reIssueContent = JSON.parse(reIssue.data); 
                
                                    	var reDate = reIssueContent.issues[0].fields.resolutiondate;
