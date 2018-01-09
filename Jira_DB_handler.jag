@@ -6,9 +6,13 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     log.info("Dashboard hit - "+ session.get("username"));
     var reqFromUser = request.getParameter("reqFromUser");
     
-    	  var supJiraURL = data.jira_db.supportJiraURL;
+    	  var supportJiraURL = data.jira_db.supportJiraURL;
+    	  var publicJiraURL = data.jira_db.publicJiraURL;
     	  var supportPrefix = data.jira_db.urlForJQLsup;
     	  var publicPrefix = data.jira_db.urlForJQLpublic;
+    	  var supportAuth = data.supportJiraAuthorization;
+    	  var publicAuth = data.publicJiraAuthorization;
+    	  var nullAuth ;
 
     var resultRetrived = false;
     
@@ -26,75 +30,45 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
         	return diffDays;        	
         }
 
-		function getTotal(prefix,category,days){
-			//This function returns the total number of records available for the given category (created, updated, resolutiondate ).
+		function getTotal(prefix,category,days,autherization){
+			//This function returns the total number of records available for the given category (created, updated, resolutiondate )
+			//in past days. Prefix sould be given as supportPrefix or publicPrefix and autherization parameter should be given appropriately.    
 			var para = category+">=-"+days+"d";
-			return get(prefix ,{jql : para , maxResults:"0"}, data.supportJiraAuthorization);
+			return get(prefix ,{jql : para , maxResults:"0"}, autherization);
 		}	
 
-		function getInside(prefix,category,days,index){
+		function getInside(prefix,category,days,index,autherization){
 			//This function returns every issue key for the given catogory (created, updated, resolutiondate ).
 			//days parameter represents the number of days to be concedered in the past from today.
 			var para = category+">=-"+days+"d";
 			if(category=="created")
-				return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"creator,created"}, data.supportJiraAuthorization); 
+				return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"creator,created"}, autherization); 
 			else			
-			    return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"*none"},data.supportJiraAuthorization);
+			    return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"*none"},autherization);
 		}
 		
-		function getJsonFromIssueKey(prefix,issuekey,contentType){
+		function getJsonFromIssueKey(prefix,issuekey,contentType,autherization){
 			//This function returns the content for a given issue key as per the contentType. (comment ,changelog )
 			var param = "key="+issuekey ;
 			if(contentType=="comment")
-				return get(prefix ,{jql : param, "fields":"comment"},data.supportJiraAuthorization);
+				return get(prefix ,{jql : param, "fields":"comment"},autherization);
 			else if(contentType=="changelog")
-				return get(prefix ,{jql : param, "expand":"changelog"},data.supportJiraAuthorization);
+				return get(prefix ,{jql : param, "expand":"changelog"},autherization);
 			else
 				return null;			
-		}					
-  
-	var date = new Date();
-	var startdate = new Date(Date.now() - (86400000*14));
-	
-	log.debug(date);
-	log.debug(startdate);
-	
-    var config = {};
-    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
+		}	
 
-
-    try {
-    	  
-    		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created","20").data);
-    		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created","20").data);
-    		log.debug(totalIssuesCreated);
-    		log.debug(totalIssuesCreatedPublic);
-    	    var totalIssuesUpdated = JSON.parse(getTotal(supportPrefix,"updated","8").data);
-    	    var totalIssuesUpdatedPublic = JSON.parse(getTotal(publicPrefix,"updated","8").data);
-    	    log.debug(totalIssuesUpdated);
-    	    log.debug(totalIssuesUpdatedPublic);
-    	    var totalIssuesResolved = JSON.parse(getTotal(supportPrefix,"resolutiondate","290").data);
-    	    var totalIssuesResolvedPublic = JSON.parse(getTotal(publicPrefix,"resolutiondate","290").data);
-    	    log.debug(totalIssuesResolved);
-    	    log.debug(totalIssuesResolvedPublic);
-                                    
-            var createdTotal = totalIssuesCreated.total;
-            var createdTotalPublic = totalIssuesCreatedPublic.total;
-            var updatedTotal = totalIssuesUpdated.total;
-            var updatedTotalPublic = totalIssuesUpdatedPublic.total;
-            var resolutionTotal = totalIssuesResolved.total;
-            var resolutionTotalPublic = totalIssuesResolvedPublic.total;
-            
-                        
-            
-            // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
-            var creator = null;
+		// #######################################################################################################
+		function insertCreator(total,url,table,auth,browse){
+			log.debug("inside the function insertCreator");
+			log.debug(browse);
+			var creator = null;
             var maxCr = 0;
             
-            for(var s=0;s<createdTotal;s+=1000){
-            	var issueData = JSON.parse(getInside(supportPrefix,"created","20",s).data); 							
-            	if(createdTotal-s<1000)
-            		maxCr = createdTotal;
+            for(var s=0;s<total;s+=1000){
+            	var issueData = JSON.parse(getInside(url,"created","0",s,auth).data); 							
+            	if(total-s<1000)
+            		maxCr = total;
             	else 
             		maxCr= 1000;
             
@@ -103,32 +77,37 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             							creator = issueData.issues[i].fields.creator.name; 
             					}
 								var crKey = issueData.issues[i].key;
-								var crUrl = supJiraURL+crKey;
+								var crUrl = browse+crKey;
             					
-            					var query1  = "INSERT INTO ISSUE_CREATER (JIRA_KEY, JIRA_URL, CREATED_DATE, CREATED_BY) VALUES('"+crKey+"', '"+crUrl+"','"+issueData.issues[i].fields.created+"' , '"+creator+"');";
+            					var query1  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, CREATED_DATE, CREATED_BY) VALUES('"+crKey+"', '"+crUrl+"','"+issueData.issues[i].fields.created+"' , '"+creator+"');";
             					db.query(query1);
             					creator = null;
             		}         													 	
              }     
-             log.debug("Insertion in to ISSUE_CREATOR finished successfully.");
-            // #################### INSERT COMMENTING IN TO ISSUE_COMMENTS TABLE #####################
+             log.debug("Insertion in to "+table+ " finished successfully.");
+		}
+		
+		// #######################################################################################################
+		function insertComments(total,url,table,auth,browse){
+			  log.debug("inside the function insertComments");
+			  log.debug(browse);
 			  var commentDate = null;
 			  var commenter = null;
 			  var maxCm = 0;
                          
-             for(var s=0;s<updatedTotal;s+=1000){
-                 var updatedIssues = JSON.parse(getInside(supportPrefix,"updated","8",s).data); 		
+             for(var s=0;s<total;s+=1000){
+                 var updatedIssues = JSON.parse(getInside(url,"updated","0",s,auth).data); 		
                  log.debug(updatedIssues);
-                 if(updatedTotal-s<1000)
-                    maxCm = updatedTotal;
+                 if(total-s<1000)
+                    maxCm = total;
                  else 
                     maxCm= 1000;
                          
                     for(var x=0;x<maxCm;x++){            													
                     	var issueKey = updatedIssues.issues[x].key;
-                    	var comUrl = supJiraURL+issueKey;
+                    	var comUrl = browse+issueKey;
                     	log.debug(issueKey);
-                    	var issue = getJsonFromIssueKey(supportPrefix,issueKey,"comment");
+                    	var issue = getJsonFromIssueKey(url,issueKey,"comment",auth);
                     	var issueContent = JSON.parse(issue.data); 
                     	log.debug(issueContent);
                     	
@@ -137,38 +116,43 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     		
                     		for(var p=0;p<noOfComments;p++){
                     			commentDate = issueContent.issues[0].fields.comment.comments[p].created;
-                    			commenter = issueContent.issues[0].fields.comment.comments[p].author.emailAddress;
-                    			var splittedDate = commentDate.split('-')[0]+"-"+commentDate.split('-')[1]+"-"+commentDate.split('-')[2]+"Z";
+                    			commenter = issueContent.issues[0].fields.comment.comments[p].author.name;
+//                     			var splittedDate = commentDate.split('-')[0]+"-"+commentDate.split('-')[1]+"-"+commentDate.split('-')[2]+"Z";
+                    			var splittedDate = commentDate.split('.')[0]+".000Z";
                     			var csDate = new Date(splittedDate);
 
                     			if(getDateDiff(csDate,date)<14){
                     				log.debug("Inside the date range checker for PMT_Jira Database");	
                     				
-                    				var query2  = "INSERT INTO ISSUE_COMMENTS (JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTER) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
+                    				var query2  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTED_BY) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
                     				db.query(query2);
                     			}                   			
                       		}
                     	}
                		}         													 	
                }                
-               log.debug("Insertion in to ISSUE_COMMENTS finished successfully.");
-            // #################### INSERT RESOLUTION DATA IN TO ISSUE_RESOLUTION TABLE #####################
-               var maxCr = 0;
-                                        
-                            for(var s=0;s<resolutionTotal;s+=1000){
-                                var resolvedIssues = JSON.parse(getInside(supportPrefix,"resolutiondate","290",s).data); 		
+               log.debug("Insertion in to " +table+ " finished successfully.");
+		}
+		// #######################################################################################################
+		function insertResolution(total,url,table,auth,browse){
+			log.debug("inside the function insertResolution");
+			log.debug(browse);
+			var maxCr = 0;
+			                                        
+                            for(var s=0;s<total;s+=1000){
+                                var resolvedIssues = JSON.parse(getInside(url,"resolutiondate","1",s,auth).data); 		
                                 log.debug(resolvedIssues);
-                                if(resolutionTotal-s<1000)
-                                   maxCr = resolutionTotal;
+                                if(total-s<1000)
+                                   maxCr = total;
                                 else 
                                    maxCr= 1000;
                                         
                                    for(var x=0;x<maxCr;x++){            													
                                    	var reIssueKey = resolvedIssues.issues[x].key;
-                                   	var reUrl = supJiraURL+reIssueKey;
+                                   	var reUrl = browse+reIssueKey;
                                    	log.debug(reIssueKey);
                                    	
-                                   	var reIssue = getJsonFromIssueKey(supportPrefix,reIssueKey,"changelog");
+                                   	var reIssue = getJsonFromIssueKey(url,reIssueKey,"changelog",auth);
                                    	var reIssueContent = JSON.parse(reIssue.data); 
                
                                    	var reDate = reIssueContent.issues[0].fields.resolutiondate;
@@ -182,7 +166,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                    			log.debug("Inside the date comparator for PMT_Jira Database");
                                    			var resolver = reIssueContent.issues[0].changelog.histories[p].author.name;
 
-                                   			var query3  = "INSERT INTO ISSUE_RESOLUTION (JIRA_KEY,JIRA_URL,RESOLVED_DATE, RESOLVED_BY) VALUES('"+reIssueKey+"','"+reUrl+"', '"+reDate+"', '"+resolver+"');";
+                                   			var query3  = "INSERT INTO " +table+ "(JIRA_KEY,JIRA_URL,RESOLVED_DATE, RESOLVED_BY) VALUES('"+reIssueKey+"','"+reUrl+"', '"+reDate+"', '"+resolver+"');";
                                    			db.query(query3);
                                    			break;
                                    		}
@@ -190,7 +174,62 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                    	}                                   	
                               	 }         													 	
                               }                
-               log.debug("Insertion in to ISSUE_RESOLUTION finished successfully.");
+               log.debug("Insertion in to " +table+ " finished successfully.");
+		}	
+		
+		// #######################################################################################################
+  
+	var date = new Date();
+	var startdate = new Date(Date.now() - (86400000*14));
+	
+	log.debug(date);
+	log.debug(startdate);
+	
+    var config = {};
+    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
+
+
+    try {
+    	
+    		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created","0",supportAuth).data);
+    		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created","0",nullAuth).data);
+    		log.debug(totalIssuesCreated);
+    		log.debug(totalIssuesCreatedPublic);
+    	    var totalIssuesUpdated = JSON.parse(getTotal(supportPrefix,"updated","0",supportAuth).data);
+    	    var totalIssuesUpdatedPublic = JSON.parse(getTotal(publicPrefix,"updated","0",nullAuth).data);
+    	    log.debug(totalIssuesUpdated);
+    	    log.debug(totalIssuesUpdatedPublic);
+    	    var totalIssuesResolved = JSON.parse(getTotal(supportPrefix,"resolutiondate","1",supportAuth).data);
+    	    var totalIssuesResolvedPublic = JSON.parse(getTotal(publicPrefix,"resolutiondate","1",nullAuth).data);
+    	    log.debug(totalIssuesResolved);
+    	    log.debug(totalIssuesResolvedPublic);
+                                    
+            var createdTotal = totalIssuesCreated.total;
+            var createdTotalPublic = totalIssuesCreatedPublic.total;
+            var updatedTotal = totalIssuesUpdated.total;
+            var updatedTotalPublic = totalIssuesUpdatedPublic.total;
+            var resolutionTotal = totalIssuesResolved.total;
+            var resolutionTotalPublic = totalIssuesResolvedPublic.total;
+            
+                        
+            
+            // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
+            
+            insertCreator(createdTotal,supportPrefix,"ISSUE_CREATOR",supportAuth,supportJiraURL);
+            insertCreator(createdTotalPublic,publicPrefix,"PUBLIC_CREATOR",nullAuth,publicJiraURL);
+            
+            
+            // #################### INSERT COMMENTING IN TO ISSUE_COMMENTS TABLE #####################
+            
+            insertComments(updatedTotal,supportPrefix,"ISSUE_COMMENTS",supportAuth,supportJiraURL);
+            insertComments(updatedTotalPublic,publicPrefix,"PUBLIC_COMMENTS",nullAuth,publicJiraURL);
+            
+			 
+            // #################### INSERT RESOLUTION DATA IN TO ISSUE_RESOLUTION TABLE #####################
+            
+            insertResolution(resolutionTotal,supportPrefix,"ISSUE_RESOLUTION",supportAuth,supportJiraURL);
+            insertResolution(resolutionTotalPublic,publicPrefix,"PUBLIC_RESOLUTION",nullAuth,publicJiraURL);
+            
             // ############################################################################################
             
                 
