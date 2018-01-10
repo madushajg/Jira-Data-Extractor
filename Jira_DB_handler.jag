@@ -11,8 +11,14 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     	  var supportPrefix = data.jira_db.urlForJQLsup;
     	  var publicPrefix = data.jira_db.urlForJQLpublic;
     	  var supportAuth = data.supportJiraAuthorization;
-    	  var publicAuth = data.publicJiraAuthorization;
     	  var nullAuth ;
+    	  
+    	  var sup_created = 0;
+    	  var sup_updated = 0;
+    	  var sup_resolved = 0;
+    	  var pub_created = 0;
+    	  var pub_updated = 0;
+    	  var pub_resolved = 0;    	  
 
     var resultRetrived = false;
     
@@ -58,15 +64,15 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 				return null;			
 		}	
 
-		// #######################################################################################################
-		function insertCreator(total,url,table,auth,browse){
+		// ######################## FUNCTION FOR INSERTING CREATOR DATA IN TO ISSUE_CREATOR TABLE ##########################
+		function insertCreator(total,url,table,auth,browse,days){
 			log.debug("inside the function insertCreator");
 			log.debug(browse);
 			var creator = null;
             var maxCr = 0;
             
             for(var s=0;s<total;s+=1000){
-            	var issueData = JSON.parse(getInside(url,"created","0",s,auth).data); 							
+            	var issueData = JSON.parse(getInside(url,"created",days,s,auth).data); 							
             	if(total-s<1000)
             		maxCr = total;
             	else 
@@ -87,8 +93,8 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
              log.debug("Insertion in to "+table+ " finished successfully.");
 		}
 		
-		// #######################################################################################################
-		function insertComments(total,url,table,auth,browse){
+		// ######################## FUNCTION FOR INSERTING COMMENTS DATA IN TO ISSUE_CREATOR TABLE ##########################
+		function insertComments(total,url,table,auth,browse,days){
 			  log.debug("inside the function insertComments");
 			  log.debug(browse);
 			  var commentDate = null;
@@ -96,7 +102,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 			  var maxCm = 0;
                          
              for(var s=0;s<total;s+=1000){
-                 var updatedIssues = JSON.parse(getInside(url,"updated","0",s,auth).data); 		
+                 var updatedIssues = JSON.parse(getInside(url,"updated",days,s,auth).data); 		
                  log.debug(updatedIssues);
                  if(total-s<1000)
                     maxCm = total;
@@ -133,14 +139,14 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                }                
                log.debug("Insertion in to " +table+ " finished successfully.");
 		}
-		// #######################################################################################################
-		function insertResolution(total,url,table,auth,browse){
+		// ######################## FUNCTION FOR INSERTING RESOLUTION DATA IN TO ISSUE_CREATOR TABLE ##########################
+		function insertResolution(total,url,table,auth,browse,days){
 			log.debug("inside the function insertResolution");
 			log.debug(browse);
 			var maxCr = 0;
 			                                        
                             for(var s=0;s<total;s+=1000){
-                                var resolvedIssues = JSON.parse(getInside(url,"resolutiondate","1",s,auth).data); 		
+                                var resolvedIssues = JSON.parse(getInside(url,"resolutiondate",days,s,auth).data); 		
                                 log.debug(resolvedIssues);
                                 if(total-s<1000)
                                    maxCr = total;
@@ -156,13 +162,17 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                    	var reIssueContent = JSON.parse(reIssue.data); 
                
                                    	var reDate = reIssueContent.issues[0].fields.resolutiondate;
+                                   	var splittedReDate = reDate.split('.')[0]+".000Z";
+                                   	var sreDate = new Date(splittedReDate);
                                    	
                                    	var historyCount = reIssueContent.issues[0].changelog.total;
                                    	
                                    	for(var p=0;p<historyCount;p++){
                                    		var changedDate = reIssueContent.issues[0].changelog.histories[p].created;
-                                   		
-                                   		if(reDate == changedDate){
+                                   		var splittedChangedDate = changedDate.split('.')[0]+".000Z";
+                                   		var scDate = new Date(splittedChangedDate);
+										                                   		
+                                   		if(((scDate.getTime()-sreDate.getTime())/1000 == 1) || (scDate.getTime()-sreDate.getTime())/1000 == 0){
                                    			log.debug("Inside the date comparator for PMT_Jira Database");
                                    			var resolver = reIssueContent.issues[0].changelog.histories[p].author.name;
 
@@ -177,7 +187,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                log.debug("Insertion in to " +table+ " finished successfully.");
 		}	
 		
-		// #######################################################################################################
+		// #################################################################################################################
   
 	var date = new Date();
 	var startdate = new Date(Date.now() - (86400000*14));
@@ -191,16 +201,16 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
     try {
     	
-    		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created","0",supportAuth).data);
-    		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created","0",nullAuth).data);
+    		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created",sup_created,supportAuth).data);
+    		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created",pub_created,nullAuth).data);
     		log.debug(totalIssuesCreated);
     		log.debug(totalIssuesCreatedPublic);
-    	    var totalIssuesUpdated = JSON.parse(getTotal(supportPrefix,"updated","0",supportAuth).data);
-    	    var totalIssuesUpdatedPublic = JSON.parse(getTotal(publicPrefix,"updated","0",nullAuth).data);
+    	    var totalIssuesUpdated = JSON.parse(getTotal(supportPrefix,"updated",sup_updated,supportAuth).data);
+    	    var totalIssuesUpdatedPublic = JSON.parse(getTotal(publicPrefix,"updated",pub_updated,nullAuth).data);
     	    log.debug(totalIssuesUpdated);
     	    log.debug(totalIssuesUpdatedPublic);
-    	    var totalIssuesResolved = JSON.parse(getTotal(supportPrefix,"resolutiondate","1",supportAuth).data);
-    	    var totalIssuesResolvedPublic = JSON.parse(getTotal(publicPrefix,"resolutiondate","1",nullAuth).data);
+    	    var totalIssuesResolved = JSON.parse(getTotal(supportPrefix,"resolutiondate",sup_resolved,supportAuth).data);
+    	    var totalIssuesResolvedPublic = JSON.parse(getTotal(publicPrefix,"resolutiondate",pub_resolved,nullAuth).data);
     	    log.debug(totalIssuesResolved);
     	    log.debug(totalIssuesResolvedPublic);
                                     
@@ -215,20 +225,20 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             
             // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
             
-            insertCreator(createdTotal,supportPrefix,"ISSUE_CREATOR",supportAuth,supportJiraURL);
-            insertCreator(createdTotalPublic,publicPrefix,"PUBLIC_CREATOR",nullAuth,publicJiraURL);
+            insertCreator(createdTotal,supportPrefix,"ISSUE_CREATOR",supportAuth,supportJiraURL,sup_created);
+            insertCreator(createdTotalPublic,publicPrefix,"PUBLIC_CREATOR",nullAuth,publicJiraURL,pub_created);
             
             
             // #################### INSERT COMMENTING IN TO ISSUE_COMMENTS TABLE #####################
             
-            insertComments(updatedTotal,supportPrefix,"ISSUE_COMMENTS",supportAuth,supportJiraURL);
-            insertComments(updatedTotalPublic,publicPrefix,"PUBLIC_COMMENTS",nullAuth,publicJiraURL);
+            insertComments(updatedTotal,supportPrefix,"ISSUE_COMMENTS",supportAuth,supportJiraURL,sup_updated);
+            insertComments(updatedTotalPublic,publicPrefix,"PUBLIC_COMMENTS",nullAuth,publicJiraURL,pub_updated);
             
 			 
             // #################### INSERT RESOLUTION DATA IN TO ISSUE_RESOLUTION TABLE #####################
             
-            insertResolution(resolutionTotal,supportPrefix,"ISSUE_RESOLUTION",supportAuth,supportJiraURL);
-            insertResolution(resolutionTotalPublic,publicPrefix,"PUBLIC_RESOLUTION",nullAuth,publicJiraURL);
+            insertResolution(resolutionTotal,supportPrefix,"ISSUE_RESOLUTION",supportAuth,supportJiraURL,sup_resolved);
+            insertResolution(resolutionTotalPublic,publicPrefix,"PUBLIC_RESOLUTION",nullAuth,publicJiraURL,pub_resolved);
             
             // ############################################################################################
             
@@ -250,78 +260,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 <html lang="en">
 <head>
 
-<style type="text/css">
 
-table.rotationt {
-	table-layout:fixed;
-	overflow: scroll;
-	width: auto;
-}
-
-table.rotationt th {
-	padding: 0.500em;	
-	text-align: center;	
-	height:35px;		
-	
-}
-
-table.rotationt td {
-	padding: 0.500em;
-	text-align: center;	
-	border-right-color: #FFA500;
-	height:30px;
-	
-	
-}
-
-table.rotationt tr:nth-child(odd) { background-color: #edf0f0; }
-
-	/* Push the first cell to the right so it doesn't stick to the table border */
-table.rotationt td:first-child, table.rotationt th:first-child {
-		width: 15%;
-		text-align: center;
-		padding: 0;
-		/*border: none;
-		border-bottom: 1px solid #f8f9fa;*/
-	}
-	
-table.rotationt td:nth-child(2), table.rotationt th:nth-child(2) {
-	width: 25%;
-	text-align: center;
-	padding: 0;
-	/*border: none;
-	border-bottom: 1px solid #f8f9fa;*/
-}
-table.rotationt td:nth-child(3), table.rotationt th:nth-child(2) {
-	width: 30%;
-	text-align: center;
-	padding: 0;
-	/*border: none;
-	border-bottom: 1px solid #f8f9fa;*/
-}
-table.rotationt td:nth-child(4), table.rotationt th:nth-child(2) {
-	width: 30%;
-	text-align: center;
-	padding: 0;
-	/*border: none;
-	border-bottom: 1px solid #f8f9fa;*/
-}
-
-table.rotationt {
-  overflow: hidden;
-}
-
-table.rotationt tr:hover {
-  background-color: #ffd11a;
-}
-
-table.rotationt td, table.rotationt th {
-  position: relative;
-}
-
-
-
-</style>
 </head>
 <body>
 <p>All the data has successfully inserted in to database.</p>
