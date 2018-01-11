@@ -14,11 +14,11 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     	  var nullAuth ;
     	  
     	  var sup_created = 0;
-    	  var sup_updated = 0;
-    	  var sup_resolved = 0;
+    	  var sup_updated = 51;
+    	  var sup_resolved = 51;
     	  var pub_created = 0;
-    	  var pub_updated = 0;
-    	  var pub_resolved = 0;    	  
+    	  var pub_updated = 51;
+    	  var pub_resolved = 51;    	  
 
     var resultRetrived = false;
     
@@ -74,17 +74,18 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             for(var s=0;s<total;s+=1000){
             	var issueData = JSON.parse(getInside(url,"created",days,s,auth).data); 							
             	if(total-s<1000)
-            		maxCr = total;
+            		maxCr = total-s;
             	else 
             		maxCr= 1000;
             
-            		for(var i=0;i<maxCr;i++){            													
+            		for(var i=0;i<maxCr;i++){     
+            					
             					if(issueData.issues[i].fields.creator !== null){ 															
             							creator = issueData.issues[i].fields.creator.name; 
             					}
 								var crKey = issueData.issues[i].key;
 								var crUrl = browse+crKey;
-            					
+								log.debug(crKey);
             					var query1  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, CREATED_DATE, CREATED_BY) VALUES('"+crKey+"', '"+crUrl+"','"+issueData.issues[i].fields.created+"' , '"+creator+"');";
             					db.query(query1);
             					creator = null;
@@ -105,7 +106,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                  var updatedIssues = JSON.parse(getInside(url,"updated",days,s,auth).data); 		
                  log.debug(updatedIssues);
                  if(total-s<1000)
-                    maxCm = total;
+                    maxCm = total-s;
                  else 
                     maxCm= 1000;
                          
@@ -127,7 +128,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     			var splittedDate = commentDate.split('.')[0]+".000Z";
                     			var csDate = new Date(splittedDate);
 
-                    			if(getDateDiff(csDate,date)<14){
+                    			if(getDateDiff(csDate,date)<52){
                     				log.debug("Inside the date range checker for PMT_Jira Database");	
                     				
                     				var query2  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTED_BY) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
@@ -149,7 +150,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                 var resolvedIssues = JSON.parse(getInside(url,"resolutiondate",days,s,auth).data); 		
                                 log.debug(resolvedIssues);
                                 if(total-s<1000)
-                                   maxCr = total;
+                                   maxCr = total-s;
                                 else 
                                    maxCr= 1000;
                                         
@@ -200,7 +201,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 
     try {
-    	
+    	 
     		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created",sup_created,supportAuth).data);
     		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created",pub_created,nullAuth).data);
     		log.debug(totalIssuesCreated);
