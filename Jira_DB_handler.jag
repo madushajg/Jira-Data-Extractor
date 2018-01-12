@@ -14,11 +14,11 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     	  var nullAuth ;
     	  
     	  var sup_created = 0;
-    	  var sup_updated = 51;
-    	  var sup_resolved = 51;
+    	  var sup_updated = 52;
+    	  var sup_resolved = 52;
     	  var pub_created = 0;
-    	  var pub_updated = 51;
-    	  var pub_resolved = 51;    	  
+    	  var pub_updated = 52;
+    	  var pub_resolved = 52;    	  
 
     var resultRetrived = false;
     
@@ -110,7 +110,8 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                  else 
                     maxCm= 1000;
                          
-                    for(var x=0;x<maxCm;x++){            													
+                    for(var x=0;x<maxCm;x++){   
+                    	log.debug(s+x);
                     	var issueKey = updatedIssues.issues[x].key;
                     	var comUrl = browse+issueKey;
                     	log.debug(issueKey);
@@ -122,18 +123,22 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     		var noOfComments = issueContent.issues[0].fields.comment.maxResults;
                     		
                     		for(var p=0;p<noOfComments;p++){
-                    			commentDate = issueContent.issues[0].fields.comment.comments[p].created;
-                    			commenter = issueContent.issues[0].fields.comment.comments[p].author.name;
-//                     			var splittedDate = commentDate.split('-')[0]+"-"+commentDate.split('-')[1]+"-"+commentDate.split('-')[2]+"Z";
-                    			var splittedDate = commentDate.split('.')[0]+".000Z";
-                    			var csDate = new Date(splittedDate);
-
-                    			if(getDateDiff(csDate,date)<52){
-                    				log.debug("Inside the date range checker for PMT_Jira Database");	
+                    			try{
+                    				commentDate = issueContent.issues[0].fields.comment.comments[p].created;
+                    				commenter = issueContent.issues[0].fields.comment.comments[p].author.name;
+                    				var splittedDate = commentDate.split('.')[0]+".000Z";
+                    				var csDate = new Date(splittedDate);
                     				
-                    				var query2  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTED_BY) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
-                    				db.query(query2);
-                    			}                   			
+                    				if(getDateDiff(csDate,date)<53){
+                    				      log.debug("Inside the date range checker for PMT_Jira Database");	
+                    				                    				
+                    				      var query2  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTED_BY) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
+                    				      db.query(query2);
+                    				 }                   				
+                    			}   
+                    			catch(e){
+                    				log.error("Error occurred while retrieving information from Jira API in Inserting Comments : "+ e.toString());
+                    			}                			
                       		}
                     	}
                		}         													 	
@@ -192,6 +197,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
   
 	var date = new Date();
 	var startdate = new Date(Date.now() - (86400000*14));
+// 	var yesterday = new Date(Date.now() - 86400000);
 	
 	log.debug(date);
 	log.debug(startdate);
@@ -201,7 +207,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 
     try {
-    	 
+    	
     		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created",sup_created,supportAuth).data);
     		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created",pub_created,nullAuth).data);
     		log.debug(totalIssuesCreated);
@@ -260,8 +266,6 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 <html lang="en">
 <head>
-
-
 </head>
 <body>
 <p>All the data has successfully inserted in to database.</p>
