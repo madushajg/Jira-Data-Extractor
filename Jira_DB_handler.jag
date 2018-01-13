@@ -14,11 +14,11 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
     	  var nullAuth ;
     	  
     	  var sup_created = 0;
-    	  var sup_updated = 52;
-    	  var sup_resolved = 52;
-    	  var pub_created = 0;
-    	  var pub_updated = 52;
-    	  var pub_resolved = 52;    	  
+    	  var sup_updated = 0;
+    	  var sup_resolved = 0;
+    	  var pub_created = 5;
+    	  var pub_updated = 0;
+    	  var pub_resolved = 5;    	  
 
     var resultRetrived = false;
     
@@ -64,7 +64,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 				return null;			
 		}	
 
-		// ######################## FUNCTION FOR INSERTING CREATOR DATA IN TO ISSUE_CREATOR TABLE ##########################
+		// ######################## FUNCTION FOR INSERTING CREATOR DATA IN TO CREATOR TABLES ##########################
 		function insertCreator(total,url,table,auth,browse,days){
 			log.debug("inside the function insertCreator");
 			log.debug(browse);
@@ -79,22 +79,28 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             		maxCr= 1000;
             
             		for(var i=0;i<maxCr;i++){     
+            			try{
+            				if(issueData.issues[i].fields.creator !== null){
+            				creator = issueData.issues[i].fields.creator.name; 
+            				}
+            				var crKey = issueData.issues[i].key;
+            				var crUrl = browse+crKey;
+            				log.debug(s+i);
+            				log.debug(crKey);
+            				var query1  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, CREATED_DATE, CREATED_BY) VALUES('"+crKey+"', '"+crUrl+"','"+issueData.issues[i].fields.created+"' , '"+creator+"');";
+            				db.query(query1);
+            				creator = null;
+            			}	
+            			catch(e){
+            				log.error("Error occurred while retrieving Issue Create information from Jira API: "+ e.toString());
+            			}	
             					
-            					if(issueData.issues[i].fields.creator !== null){ 															
-            							creator = issueData.issues[i].fields.creator.name; 
-            					}
-								var crKey = issueData.issues[i].key;
-								var crUrl = browse+crKey;
-								log.debug(crKey);
-            					var query1  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, CREATED_DATE, CREATED_BY) VALUES('"+crKey+"', '"+crUrl+"','"+issueData.issues[i].fields.created+"' , '"+creator+"');";
-            					db.query(query1);
-            					creator = null;
             		}         													 	
              }     
-             log.debug("Insertion in to "+table+ " finished successfully.");
+             log.info("Insertion in to "+table+ " finished successfully.");
 		}
 		
-		// ######################## FUNCTION FOR INSERTING COMMENTS DATA IN TO ISSUE_CREATOR TABLE ##########################
+		// ######################## FUNCTION FOR INSERTING COMMENTS DATA IN TO COMMENTS TABLES ##########################
 		function insertComments(total,url,table,auth,browse,days){
 			  log.debug("inside the function insertComments");
 			  log.debug(browse);
@@ -111,41 +117,48 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                     maxCm= 1000;
                          
                     for(var x=0;x<maxCm;x++){   
-                    	log.debug(s+x);
-                    	var issueKey = updatedIssues.issues[x].key;
-                    	var comUrl = browse+issueKey;
-                    	log.debug(issueKey);
-                    	var issue = getJsonFromIssueKey(url,issueKey,"comment",auth);
-                    	var issueContent = JSON.parse(issue.data); 
-                    	log.debug(issueContent);
-                    	
-                    	if(issueContent.issues[0].fields.comment !== null){
-                    		var noOfComments = issueContent.issues[0].fields.comment.maxResults;
-                    		
-                    		for(var p=0;p<noOfComments;p++){
-                    			try{
-                    				commentDate = issueContent.issues[0].fields.comment.comments[p].created;
-                    				commenter = issueContent.issues[0].fields.comment.comments[p].author.name;
-                    				var splittedDate = commentDate.split('.')[0]+".000Z";
-                    				var csDate = new Date(splittedDate);
-                    				
-                    				if(getDateDiff(csDate,date)<53){
-                    				      log.debug("Inside the date range checker for PMT_Jira Database");	
-                    				                    				
-                    				      var query2  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTED_BY) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
-                    				      db.query(query2);
-                    				 }                   				
-                    			}   
-                    			catch(e){
-                    				log.error("Error occurred while retrieving information from Jira API in Inserting Comments : "+ e.toString());
-                    			}                			
-                      		}
+                    	try{
+                    		log.debug(s+x);
+                    		var issueKey = updatedIssues.issues[x].key;
+                    		var comUrl = browse+issueKey;
+                    		log.debug(issueKey);
+                    		var issue = getJsonFromIssueKey(url,issueKey,"comment",auth);
+                    		var issueContent = JSON.parse(issue.data); 
+                    		log.debug(issueContent);
+                    		                    	
+                    		if(issueContent.issues[0].fields.comment !== null){
+                    		     var noOfComments = issueContent.issues[0].fields.comment.maxResults;
+                    		                    		
+                    		     for(var p=0;p<noOfComments;p++){
+                    		     try{
+                    		         commentDate = issueContent.issues[0].fields.comment.comments[p].created;
+                    		         commenter = issueContent.issues[0].fields.comment.comments[p].author.name;
+                    		         var splittedDate = commentDate.split('.')[0]+".000Z";
+                    		         var csDate = new Date(splittedDate);
+                    		                    				
+                    		         if(getDateDiff(csDate,date)<=1){
+                    		                log.debug("Inside the date range checker for PMT_Jira Database");	
+                    		                    				                    				
+                    		                var query2  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTED_BY) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
+//                     		                var query2  = "(INSERT IGNORE INTO)ALTER TABLE " +table+ " ADD UNIQUE(JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTED_BY) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
+                    		                                    		                
+                    		                db.query(query2);
+                    		         }                   				
+                    		       }   
+                    		     catch(e){
+                    		         log.error("Error occurred while retrieving information from Jira API in Inserting Comments : "+ e.toString());
+                    		       }                			
+                    		     }
+                    		}		
+                    	}
+                    	catch(e){
+                    		log.error("Error occurred while retrieving information from Jira API in Retrieving Comments Data: "+ e.toString());
                     	}
                		}         													 	
                }                
-               log.debug("Insertion in to " +table+ " finished successfully.");
+               log.info("Insertion in to " +table+ " finished successfully.");
 		}
-		// ######################## FUNCTION FOR INSERTING RESOLUTION DATA IN TO ISSUE_CREATOR TABLE ##########################
+		// ######################## FUNCTION FOR INSERTING RESOLUTION DATA IN TO RESOLUTION TABLES ##########################
 		function insertResolution(total,url,table,auth,browse,days){
 			log.debug("inside the function insertResolution");
 			log.debug(browse);
@@ -160,44 +173,48 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
                                    maxCr= 1000;
                                         
                                    for(var x=0;x<maxCr;x++){            													
-                                   	var reIssueKey = resolvedIssues.issues[x].key;
-                                   	var reUrl = browse+reIssueKey;
-                                   	log.debug(reIssueKey);
-                                   	
-                                   	var reIssue = getJsonFromIssueKey(url,reIssueKey,"changelog",auth);
-                                   	var reIssueContent = JSON.parse(reIssue.data); 
-               
-                                   	var reDate = reIssueContent.issues[0].fields.resolutiondate;
-                                   	var splittedReDate = reDate.split('.')[0]+".000Z";
-                                   	var sreDate = new Date(splittedReDate);
-                                   	
-                                   	var historyCount = reIssueContent.issues[0].changelog.total;
-                                   	
-                                   	for(var p=0;p<historyCount;p++){
-                                   		var changedDate = reIssueContent.issues[0].changelog.histories[p].created;
-                                   		var splittedChangedDate = changedDate.split('.')[0]+".000Z";
-                                   		var scDate = new Date(splittedChangedDate);
-										                                   		
-                                   		if(((scDate.getTime()-sreDate.getTime())/1000 == 1) || (scDate.getTime()-sreDate.getTime())/1000 == 0){
-                                   			log.debug("Inside the date comparator for PMT_Jira Database");
-                                   			var resolver = reIssueContent.issues[0].changelog.histories[p].author.name;
-
-                                   			var query3  = "INSERT INTO " +table+ "(JIRA_KEY,JIRA_URL,RESOLVED_DATE, RESOLVED_BY) VALUES('"+reIssueKey+"','"+reUrl+"', '"+reDate+"', '"+resolver+"');";
-                                   			db.query(query3);
-                                   			break;
-                                   		}
-               
-                                   	}                                   	
+                                   		try{
+                                   			var reIssueKey = resolvedIssues.issues[x].key;
+                                   			var reUrl = browse+reIssueKey;
+                                   			log.debug(s+x);
+                                   			log.debug(reIssueKey);
+                                   			                                   	
+                                   			var reIssue = getJsonFromIssueKey(url,reIssueKey,"changelog",auth);
+                                   			var reIssueContent = JSON.parse(reIssue.data); 
+                                   			               
+                                   			var reDate = reIssueContent.issues[0].fields.resolutiondate;
+                                   			var splittedReDate = reDate.split('.')[0]+".000Z";
+                                   			var sreDate = new Date(splittedReDate);
+                                   			                                   	
+                                   			var historyCount = reIssueContent.issues[0].changelog.total;
+                                   			                                   	
+                                   			for(var p=0;p<historyCount;p++){
+                                   			      var changedDate = reIssueContent.issues[0].changelog.histories[p].created;
+                                   			      var splittedChangedDate = changedDate.split('.')[0]+".000Z";
+                                   			      var scDate = new Date(splittedChangedDate);
+                                   													                                   		
+                                   			      if(((scDate.getTime()-sreDate.getTime())/1000 == 1) || (scDate.getTime()-sreDate.getTime())/1000 == 0){
+                                   			             log.debug("Inside the date comparator for PMT_Jira Database");
+                                   			             var resolver = reIssueContent.issues[0].changelog.histories[p].author.name;
+                                   			
+                                   			             var query3  = "INSERT INTO " +table+ "(JIRA_KEY,JIRA_URL,RESOLVED_DATE, RESOLVED_BY) VALUES('"+reIssueKey+"','"+reUrl+"', '"+reDate+"', '"+resolver+"');";
+                                   			             db.query(query3);
+                                   			             break;
+                                   			      }               
+                                   			 }                            			
+                                   		}   
+                                   		catch(e){
+                                   			log.error("Error occurred while retrieving information from Jira API in Inserting Resolutions : "+ e.toString());
+                                   		}                               	
                               	 }         													 	
                               }                
-               log.debug("Insertion in to " +table+ " finished successfully.");
+               log.info("Insertion in to " +table+ " finished successfully.");
 		}	
 		
 		// #################################################################################################################
   
 	var date = new Date();
 	var startdate = new Date(Date.now() - (86400000*14));
-// 	var yesterday = new Date(Date.now() - 86400000);
 	
 	log.debug(date);
 	log.debug(startdate);
@@ -207,7 +224,7 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 
     try {
-    	
+    	 
     		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created",sup_created,supportAuth).data);
     		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created",pub_created,nullAuth).data);
     		log.debug(totalIssuesCreated);
@@ -232,20 +249,20 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
             
             // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
             
-            insertCreator(createdTotal,supportPrefix,"ISSUE_CREATOR",supportAuth,supportJiraURL,sup_created);
-            insertCreator(createdTotalPublic,publicPrefix,"PUBLIC_CREATOR",nullAuth,publicJiraURL,pub_created);
+            insertCreator(createdTotal,supportPrefix,"ISSUE_CREATOR_NEW",supportAuth,supportJiraURL,sup_created);
+            insertCreator(createdTotalPublic,publicPrefix,"PUBLIC_CREATOR_NEW",nullAuth,publicJiraURL,pub_created);
             
             
             // #################### INSERT COMMENTING IN TO ISSUE_COMMENTS TABLE #####################
             
-            insertComments(updatedTotal,supportPrefix,"ISSUE_COMMENTS",supportAuth,supportJiraURL,sup_updated);
-            insertComments(updatedTotalPublic,publicPrefix,"PUBLIC_COMMENTS",nullAuth,publicJiraURL,pub_updated);
+            insertComments(updatedTotal,supportPrefix,"ISSUE_COMMENTS_NEW",supportAuth,supportJiraURL,sup_updated);
+            insertComments(updatedTotalPublic,publicPrefix,"PUBLIC_COMMENTS_NEW",nullAuth,publicJiraURL,pub_updated);
             
 			 
             // #################### INSERT RESOLUTION DATA IN TO ISSUE_RESOLUTION TABLE #####################
             
-            insertResolution(resolutionTotal,supportPrefix,"ISSUE_RESOLUTION",supportAuth,supportJiraURL,sup_resolved);
-            insertResolution(resolutionTotalPublic,publicPrefix,"PUBLIC_RESOLUTION",nullAuth,publicJiraURL,pub_resolved);
+            insertResolution(resolutionTotal,supportPrefix,"ISSUE_RESOLUTION_NEW",supportAuth,supportJiraURL,sup_resolved);
+            insertResolution(resolutionTotalPublic,publicPrefix,"PUBLIC_RESOLUTION_NEW",nullAuth,publicJiraURL,pub_resolved);
             
             // ############################################################################################
             
@@ -266,9 +283,10 @@ if (request.getParameter("logout") == null && session.get("logged-in") != null) 
 
 <html lang="en">
 <head>
+
 </head>
 <body>
-<p>All the data has successfully inserted in to database.</p>
+<p>All the data has been successfully inserted in to database.</p>
 </body>
 </html>
 
