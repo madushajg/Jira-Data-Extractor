@@ -1,0 +1,272 @@
+var log = new Log();
+
+var data = require('../config.json');        
+
+var syncJiraDB = function(){   
+    
+		  log.info("syncJiraDB HIT");
+    
+    	  var supportJiraURL = data.jira_db.supportJiraURL;
+    	  var publicJiraURL = data.jira_db.publicJiraURL;
+    	  var supportPrefix = data.jira_db.urlForJQLsup;
+    	  var publicPrefix = data.jira_db.urlForJQLpublic;
+    	  var supportAuth = data.supportJiraAuthorization;
+    	  var nullAuth ;
+   
+    	  // Set the number of days in the past (from today) to be retrived. Now this program retrieving only last day.
+    	  var sup_created = 0;
+    	  var sup_updated = 0;
+    	  var sup_resolved = 0;
+    	  var pub_created = 0;
+    	  var pub_updated = 0;
+    	  var pub_resolved = 0;    	  
+
+       function getDateDiff(fromdate, toDate){
+        	var date1 = new Date(fromdate);
+        	var date2 = new Date(toDate);
+        	
+	        var timeDiff = date2.getTime() - date1.getTime();	        
+        	var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24)); 
+        	
+        	return diffDays;        	
+        }
+
+		function getTotal(prefix,category,days,autherization){
+			//This function returns the total number of records available for the given category (created, updated, resolutiondate )
+			//in past days. Prefix sould be given as supportPrefix or publicPrefix and autherization parameter should be given appropriately.    
+			var para = category+">=-"+days+"d";
+			return get(prefix ,{jql : para , maxResults:"0"}, autherization);
+		}	
+
+		function getInside(prefix,category,days,index,autherization){
+			//This function returns every issue key for the given catogory (created, updated, resolutiondate ).
+			//days parameter represents the number of days to be concedered in the past from today.
+			var para = category+">=-"+days+"d";
+			if(category=="created")
+				return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"creator,created"}, autherization); 
+			else			
+			    return get(prefix ,{jql : para , maxResults:"1000", "startAt":index, "fields":"*none"},autherization);
+		}
+		
+		function getJsonFromIssueKey(prefix,issuekey,contentType,autherization){
+			//This function returns the content for a given issue key as per the contentType. (comment ,changelog )
+			var param = "key="+issuekey ;
+			if(contentType=="comment")
+				return get(prefix ,{jql : param, "fields":"comment"},autherization);
+			else if(contentType=="changelog")
+				return get(prefix ,{jql : param, "expand":"changelog"},autherization);
+			else
+				return null;			
+		}	
+
+		// ######################## FUNCTION FOR INSERTING CREATOR DATA IN TO CREATOR TABLES ##########################
+		function insertCreator(total,url,table,auth,browse,days){
+			log.debug("inside the function insertCreator");
+			log.debug(browse);
+			var creator = null;
+            var maxCr = 0;
+            
+            for(var s=0;s<total;s+=1000){
+            	var issueData = JSON.parse(getInside(url,"created",days,s,auth).data); 							
+            	if(total-s<1000)
+            		maxCr = total-s;
+            	else 
+            		maxCr= 1000;
+            
+            		for(var i=0;i<maxCr;i++){     
+            			try{
+            				if(issueData.issues[i].fields.creator !== null){
+            				creator = issueData.issues[i].fields.creator.name; 
+            				}
+            				var crKey = issueData.issues[i].key;
+            				var crUrl = browse+crKey;
+            				log.debug(crKey);
+            				var query1  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, CREATED_DATE, CREATED_BY) VALUES('"+crKey+"', '"+crUrl+"','"+issueData.issues[i].fields.created+"' , '"+creator+"');";
+            				db.query(query1);
+            				creator = null;
+            			}	
+            			catch(e){
+            				log.error("Error occurred while retrieving Issue Create information from Jira API: "+ e.toString());
+            			}
+            		}         													 	
+             }     
+             log.info("Insertion in to "+table+ " finished successfully.");
+		}
+		
+		// ######################## FUNCTION FOR INSERTING COMMENTS DATA IN TO COMMENTS TABLES ##########################
+		function insertComments(total,url,table,auth,browse,days){
+			  log.debug("inside the function insertComments");
+			  log.debug(browse);
+			  var commentDate = null;
+			  var commenter = null;
+			  var maxCm = 0;
+                         
+             for(var s=0;s<total;s+=1000){
+                 var updatedIssues = JSON.parse(getInside(url,"updated",days,s,auth).data); 		
+                 log.debug(updatedIssues);
+                 if(total-s<1000)
+                    maxCm = total-s;
+                 else 
+                    maxCm= 1000;
+                         
+                    for(var x=0;x<maxCm;x++){   
+                    	try{
+                    		log.debug(s+x);
+                    		var issueKey = updatedIssues.issues[x].key;
+                    		var comUrl = browse+issueKey;
+                    		log.debug(issueKey);
+                    		var issue = getJsonFromIssueKey(url,issueKey,"comment",auth);
+                    		var issueContent = JSON.parse(issue.data); 
+                    		log.debug(issueContent);
+                    		                    	
+                    		if(issueContent.issues[0].fields.comment !== null){
+                    		     var noOfComments = issueContent.issues[0].fields.comment.maxResults;
+                    		                    		
+                    		     for(var p=0;p<noOfComments;p++){
+                    		     try{
+                    		         commentDate = issueContent.issues[0].fields.comment.comments[p].created;
+                    		         commenter = issueContent.issues[0].fields.comment.comments[p].author.name;
+                    		         var splittedDate = commentDate.split('.')[0]+".000Z";
+                    		         var csDate = new Date(splittedDate);
+                    		                    				
+                    		         if(getDateDiff(csDate,date)<=1){
+                    		                log.debug("Inside the date range checker for PMT_Jira Database");	
+                    		                    				                    				
+                    		                var query2  = "INSERT INTO " +table+ "(JIRA_KEY, JIRA_URL, COMMENTED_DATE, COMMENTED_BY) VALUES('"+issueKey+"' , '"+comUrl+"' , '"+commentDate+"', '"+commenter+"');";
+                    		                db.query(query2);
+                    		         }                   				
+                    		       }   
+                    		     catch(e){
+                    		         log.error("Error occurred while retrieving information from Jira API in Inserting Comments : "+ e.toString());
+                    		       }                			
+                    		     }
+                    		}		
+                    	}
+                    	catch(e){
+                    		log.error("Error occurred while retrieving information from Jira API in Retrieving Comments Data: "+ e.toString());
+                    	}
+               		}         													 	
+               }                
+               log.info("Insertion in to " +table+ " finished successfully.");
+		}
+		// ######################## FUNCTION FOR INSERTING RESOLUTION DATA IN TO RESOLUTION TABLES ##########################
+		function insertResolution(total,url,table,auth,browse,days){
+			log.debug("inside the function insertResolution");
+			log.debug(browse);
+			var maxCr = 0;
+			                                        
+                            for(var s=0;s<total;s+=1000){
+                                var resolvedIssues = JSON.parse(getInside(url,"resolutiondate",days,s,auth).data); 		
+                                log.debug(resolvedIssues);
+                                if(total-s<1000)
+                                   maxCr = total-s;
+                                else 
+                                   maxCr= 1000;
+                                        
+                                   for(var x=0;x<maxCr;x++){            													
+                                   		try{
+                                   			var reIssueKey = resolvedIssues.issues[x].key;
+                                   			var reUrl = browse+reIssueKey;
+                                   			log.debug(s+x);
+                                   			log.debug(reIssueKey);
+                                   			                                   	
+                                   			var reIssue = getJsonFromIssueKey(url,reIssueKey,"changelog",auth);
+                                   			var reIssueContent = JSON.parse(reIssue.data); 
+                                   			               
+                                   			var reDate = reIssueContent.issues[0].fields.resolutiondate;
+                                   			var splittedReDate = reDate.split('.')[0]+".000Z";
+                                   			var sreDate = new Date(splittedReDate);
+                                   			                                   	
+                                   			var historyCount = reIssueContent.issues[0].changelog.total;
+                                   			                                   	
+                                   			for(var p=0;p<historyCount;p++){
+                                   			      var changedDate = reIssueContent.issues[0].changelog.histories[p].created;
+                                   			      var splittedChangedDate = changedDate.split('.')[0]+".000Z";
+                                   			      var scDate = new Date(splittedChangedDate);
+                                   													                                   		
+                                   			      if(((scDate.getTime()-sreDate.getTime())/1000 == 1) || (scDate.getTime()-sreDate.getTime())/1000 == 0){
+                                   			             log.debug("Inside the date comparator for PMT_Jira Database");
+                                   			             var resolver = reIssueContent.issues[0].changelog.histories[p].author.name;
+                                   			
+                                   			             var query3  = "INSERT INTO " +table+ "(JIRA_KEY,JIRA_URL,RESOLVED_DATE, RESOLVED_BY) VALUES('"+reIssueKey+"','"+reUrl+"', '"+reDate+"', '"+resolver+"');";
+                                   			             db.query(query3);
+                                   			             break;
+                                   			      }               
+                                   			 }                            			
+                                   		}   
+                                   		catch(e){
+                                   			log.error("Error occurred while retrieving information from Jira API in Inserting Resolutions : "+ e.toString());
+                                   		}                               	
+                              	 }         													 	
+                              }                
+               log.info("Insertion in to " +table+ " finished successfully.");
+		}	
+		
+		// #################################################################################################################
+  
+	var date = new Date();
+	
+	log.debug(date);
+	
+    var config = {};
+    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);  
+
+
+    try {
+    		var totalIssuesCreated = JSON.parse(getTotal(supportPrefix,"created",sup_created,supportAuth).data);
+    		var totalIssuesCreatedPublic = JSON.parse(getTotal(publicPrefix,"created",pub_created,nullAuth).data);
+    		log.debug(totalIssuesCreated);
+    		log.debug(totalIssuesCreatedPublic);
+    	    var totalIssuesUpdated = JSON.parse(getTotal(supportPrefix,"updated",sup_updated,supportAuth).data);
+    	    var totalIssuesUpdatedPublic = JSON.parse(getTotal(publicPrefix,"updated",pub_updated,nullAuth).data);
+    	    log.debug(totalIssuesUpdated);
+    	    log.debug(totalIssuesUpdatedPublic);
+    	    var totalIssuesResolved = JSON.parse(getTotal(supportPrefix,"resolutiondate",sup_resolved,supportAuth).data);
+    	    var totalIssuesResolvedPublic = JSON.parse(getTotal(publicPrefix,"resolutiondate",pub_resolved,nullAuth).data);
+    	    log.debug(totalIssuesResolved);
+    	    log.debug(totalIssuesResolvedPublic);
+                                    
+            var createdTotal = totalIssuesCreated.total;
+            var createdTotalPublic = totalIssuesCreatedPublic.total;
+            var updatedTotal = totalIssuesUpdated.total;
+            var updatedTotalPublic = totalIssuesUpdatedPublic.total;
+            var resolutionTotal = totalIssuesResolved.total;
+            var resolutionTotalPublic = totalIssuesResolvedPublic.total;
+            
+                        
+            
+            // #################### INSERT CREATOR DATA IN TO ISSUE_CREATOR TABLE #####################
+            
+            insertCreator(createdTotal,supportPrefix,"ISSUE_CREATOR",supportAuth,supportJiraURL,sup_created);
+            insertCreator(createdTotalPublic,publicPrefix,"PUBLIC_CREATOR",nullAuth,publicJiraURL,pub_created);
+            
+            
+            // #################### INSERT COMMENTING IN TO ISSUE_COMMENTS TABLE #####################
+            
+            insertComments(updatedTotal,supportPrefix,"ISSUE_COMMENTS",supportAuth,supportJiraURL,sup_updated);
+            insertComments(updatedTotalPublic,publicPrefix,"PUBLIC_COMMENTS",nullAuth,publicJiraURL,pub_updated);
+            
+			 
+            // #################### INSERT RESOLUTION DATA IN TO ISSUE_RESOLUTION TABLE #####################
+            
+            insertResolution(resolutionTotal,supportPrefix,"ISSUE_RESOLUTION",supportAuth,supportJiraURL,sup_resolved);
+            insertResolution(resolutionTotalPublic,publicPrefix,"PUBLIC_RESOLUTION",nullAuth,publicJiraURL,pub_resolved);
+            
+            // ############################################################################################
+            
+                
+       }
+            
+        catch(e){
+            log.error("Error occurred while retrieving information from Jira API : "+ e.toString());
+        }
+        
+        finally{
+                    db.close();
+        }
+        
+
+
+}
+
+
