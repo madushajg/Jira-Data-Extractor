@@ -1,0 +1,189 @@
+<%
+var data = require('../config.json');        
+
+if (request.getParameter("logout") == null && session.get("logged-in") != null) {
+    var log = new Log();
+    log.info("Dashboard hit - "+ session.get("username"));
+    var reqFromUser = request.getParameter("reqFromUser");
+    
+    var employee = request.getParameter("email");
+    var prefix = "https://192.168.56.212:9443/services/PMT_Support/";
+    log.debug(employee);
+
+    var days = {"innovation":0, "maintanance":0, "non-R&D": 0, "leave": 0, "services":0};
+    var nrnd1 = [num];
+    var nrnd = [num2];
+
+    var resultRetrived = false;
+    
+    if(("success").equals(reqFromUser)){
+            resultRetrived = true;               
+        }
+        
+        function getJson(url){
+           return get(prefix+url, mailpara ,{ "Accept": "application/json", "Authorization" : "Basic YWRtaW46YWRtaW4="});
+                  
+        }
+        
+        function getDateDiff(fromdate, toDate){
+        	var date1 = new Date(fromdate);
+        	var date2 = new Date(toDate);
+        	
+	        var timeDiff = date2.getTime() - date1.getTime();	        
+        	var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24)); 
+        	
+        	return diffDays;        	
+        }
+
+		
+	var date = new Date();	
+	
+    var config = {};
+    var db = new Database("jdbc:mysql://localhost:3306/PMT_Jira", "", "", config);
+    var dbPMT = new Database(data.pmtdb.databaseurl+data.pmtdb.databasename, data.pmtdb.username, data.pmtdb.password, config);
+
+
+    try {
+    	var query3 ="SELECT * FROM engineer ORDER BY email;";
+    	var engArray = dbPMT.query(query3);
+    	log.debug(engArray);
+    	log.debug(engArray.length);
+    	
+    	for(var x=0; x<engArray.length; x++){
+    		log.debug(engArray[x].email);
+    	}
+    	
+    	var mailpara = {"emailPara": employee};
+    	
+    	var daysJson = getJson("dayCountPerEmployee/");
+    	var innerJson = JSON.parse(daysJson.data);
+     	log.debug(innerJson);  
+     	log.debug(innerJson.employees.employee.length);
+     	
+     	for(var i=0;i<innerJson.employees.employee.length;i++){
+     		var allocationID = innerJson.employees.employee[i].allocationId;
+     		log.debug(nrnd.indexOf(allocationID));
+     		if(allocationID == 54 || allocationID == 42)
+     			days["innovation"] += Number(innerJson.employees.employee[i].Days);      
+     		else if(allocationID == 55 || allocationID == 33)
+     		    days["maintanance"] += Number(innerJson.employees.employee[i].Days); 
+     		else if(nrnd.indexOf(allocationID) !== -1){
+     		    days["non-R&D"] += Number(innerJson.employees.employee[i].Days); 
+     		}
+     		else if(allocationID == 37)
+     		    days["leave"] += Number(innerJson.employees.employee[i].Days); 
+     		else 
+     			days["services"] += Number(Math.abs(innerJson.employees.employee[i].Days));
+     	}
+     	     	
+     	
+                
+       }
+            
+        catch(e){
+            log.error("Error occurred while retrieving information from Jira API : "+ e.toString());
+        }
+        
+        finally{
+                    db.close();
+        }
+        
+%>
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+
+<html lang="en">
+<head>
+<style type="text/css">
+
+table.rotationt {
+	table-layout:fixed;
+	overflow: scroll;
+	width: auto;
+}
+
+table.rotationt th {
+	padding: 0.500em;	
+	text-align: center;	
+	height:35px;		
+	
+}
+
+table.rotationt td {
+	padding: 0.500em;
+	text-align: center;	
+	border-right-color: #FFA500;
+	height:30px;
+	
+	
+}
+
+table.rotationt tr:nth-child(odd) { background-color: #edf0f0; }
+
+	/* Push the first cell to the right so it doesn't stick to the table border */
+table.rotationt td:first-child, table.rotationt th:first-child {
+		width: 30%;
+		text-align: center;
+		padding: 0;
+		/*border: none;
+		border-bottom: 1px solid #f8f9fa;*/
+	}
+
+table.rotationt {
+  overflow: hidden;
+}
+
+table.rotationt tr:hover {
+  background-color: #ffd11a;
+}
+
+table.rotationt td, table.rotationt th {
+  position: relative;
+}
+
+
+
+</style>
+</head>
+<body>
+<table id="rotationt" class="rotationt"  style="width:100%">
+     <thead>
+        <tr>
+        <th>Employee</th>
+        <th>Innovation</th>
+        <th>Maintanance</th>
+        <th>Leave</th>
+        <th>Non-R&D</th>
+        <th>Services</th>
+        </tr>
+     </thead>
+     
+     <tbody>
+     	<tr>
+     	<td>
+     	    <form name="workLogJira" id="workLogJira" action="#" method="post" '>										
+                                    <fieldset>
+                    <input type="text" id="email" name="email"  class="round button dark ic-search image-right" placeholder="xyz@wso2.com"/>
+                </fieldset>
+           </form>
+     	
+     	</td>
+     	<td><% print(days["innovation"]); %></td>	
+     	<td><% print(days["maintanance"]); %></td>	
+     	<td><% print(days["leave"]); %></td>	
+     	<td><% print(days["non-R&D"]); %></td>	
+     	<td><% print(days["services"]); %></td>	
+     	</tr>
+     </tbody>
+</table>     
+</body>
+</html>
+
+<%
+}
+
+else {
+    var location = request.getRequestURL()+"?"+encodeURIComponent(request.getQueryString());
+    response.sendRedirect("../index.jag?reject=timedout&location="+location);  //exit
+}
+%>
